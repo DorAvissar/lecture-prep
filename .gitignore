@@ -16,6 +16,7 @@ dist/
 htmlcov/
 
 # Secrets - never commit real credentials
+.cache/
 .env
 *.token.json
 credentials*.json

@@ -5,6 +5,7 @@ documented in .env.example.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,11 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     database_url: str = "postgresql+psycopg://lecture_prep:lecture_prep@localhost:5432/lecture_prep"
+
+    # OneDrive via Microsoft Graph. The client ID comes from an Azure app registration (no secret needed:
+    # it is a "public client" that signs in with the device-code flow).
+    ms_client_id: str | None = None
+    ms_token_cache_path: Path = Path(".cache/msal_token_cache.json")
 
 
 @lru_cache

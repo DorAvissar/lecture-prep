@@ -8,6 +8,8 @@ requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.20.1",
     "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "msal>=1.39.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.2",
     "sqlalchemy>=2.1.6",
@@ -23,7 +25,6 @@ packages = ["src/lecture_prep"]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
