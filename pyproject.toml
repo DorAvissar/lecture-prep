@@ -21,7 +21,9 @@ packages = ["src/lecture_prep"]
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "pre-commit>=4.7.0",
     "pytest>=9.2.0",
+    "ruff>=0.17.3",
 ]
 
 [tool.pytest.ini_options]
@@ -33,3 +35,11 @@ filterwarnings = [
     # Starlette's TestClient nudges toward httpx2; httpx is still supported.
     "ignore:Using `httpx` with `starlette.testclient` is deprecated",
 ]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes, I: import sorting, B: bugbear, UP: pyupgrade, SIM: simplify
+select = ["E", "F", "I", "B", "UP", "SIM"]
