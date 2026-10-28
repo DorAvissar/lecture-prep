@@ -8,6 +8,23 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+
+    # Same database image as docker-compose.yml, so tests run against real Postgres.
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: lecture_prep
+          POSTGRES_PASSWORD: lecture_prep
+          POSTGRES_DB: lecture_prep
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lecture_prep"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v5
 
@@ -24,6 +41,13 @@ jobs:
 
       - name: Check formatting
         run: uv run ruff format --check .
+
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      # Fails if a model changed without a matching migration.
+      - name: Check migrations match models
+        run: uv run alembic check
 
       - name: Test
         run: uv run pytest
