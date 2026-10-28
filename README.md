@@ -3,7 +3,7 @@
 [![CI](https://github.com/DorAvissar/lecture-prep/actions/workflows/ci.yml/badge.svg)](https://github.com/DorAvissar/lecture-prep/actions/workflows/ci.yml)
 
 A personal assistant that gets you ready for every lecture. Each morning it reads your Google Calendar,
-finds the day's lectures, pulls the previous and current lecture material from OneDrive, and sends you on
+finds the day's lectures, pulls the previous and current lecture material from Google Drive, and sends you on
 Telegram:
 
 - **A recap** of the previous lecture: short, focused on what you need to remember.
@@ -19,7 +19,7 @@ Telegram:
 flowchart LR
     Cal[Google Calendar] --> Sched[Scheduler<br/>07:00 + before each lecture]
     Sched --> Loc[Lecture Locator]
-    OD[OneDrive<br/>lecture files] --> Loc
+    GD[Google Drive<br/>lecture files] --> Loc
     Loc --> Proc[Text extraction<br/>+ chunking + embeddings]
     Proc --> DB[(PostgreSQL<br/>+ pgvector)]
     Proc --> Sum[Summarizer<br/>Claude API]
@@ -71,21 +71,30 @@ uv run alembic check          # models and migrations are in sync
 Database tests run the real migrations, then wrap every test in a transaction that is rolled back, so
 they never leave data behind.
 
-### Connecting OneDrive
+### Connecting Google
 
-Lecture files are read from OneDrive through Microsoft Graph, with read-only access (`Files.Read`).
+The calendar and the lecture files both come from Google, through one read-only sign-in
+(`calendar.readonly` + `drive.readonly`).
 
-1. In the [Microsoft Entra admin center](https://entra.microsoft.com/), open **App registrations → New
-   registration**. Supported account types: *Accounts in any organizational directory and personal
-   Microsoft accounts*. No redirect URI is needed.
-2. Under **Authentication**, set **Allow public client flows** to *Yes* (enables the device-code sign-in).
-3. Under **API permissions**, add *Microsoft Graph → Delegated → Files.Read*.
-4. Copy the **Application (client) ID** into `MS_CLIENT_ID` in `.env`.
-5. Sign in once - the token is cached in the git-ignored `.cache/` folder:
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project.
+2. **APIs & Services → Library**: enable the *Google Calendar API* and the *Google Drive API*.
+3. **Google Auth Platform → Get started**: audience *External*. Under **Audience**, add your own Gmail
+   address as a test user.
+4. **Clients → Create client**, type *Desktop app*. Download the JSON file and save it as
+   `.secrets/google_client_secret.json` (git-ignored).
+5. Sign in once - a browser window opens, and the token is saved to the git-ignored `.cache/` folder:
 
 ```bash
-uv run python -m lecture_prep.onedrive.login
+uv run python -m lecture_prep.google_api.login
 ```
+
+> While the app's publishing status is *Testing*, Google expires the refresh token after 7 days. For a
+> personal tool, set **Audience → Publish app** to *In production*; Google then shows an "unverified app"
+> warning on the consent screen, which you can accept for your own account.
+
+Lecture files live in Google Drive under `DRIVE_LECTURES_FOLDER` (default `Lectures`), one sub-folder per
+course. With [Google Drive for desktop](https://www.google.com/drive/download/) that folder is a normal
+folder on your computer.
 
 ### Changing the database schema
 
@@ -99,12 +108,12 @@ uv run alembic upgrade head
 ## Project structure
 
 ```
-src/lecture_prep/     application code
-src/lecture_prep/db/  database models and session
-src/lecture_prep/onedrive/  Microsoft sign-in and OneDrive file access
-migrations/           Alembic database migrations
-tests/                pytest test suite
-.github/workflows/    CI pipeline
+src/lecture_prep/             application code
+src/lecture_prep/db/          database models and session
+src/lecture_prep/google_api/  Google sign-in, Drive client (and Calendar sync)
+migrations/                   Alembic database migrations
+tests/                        pytest test suite
+.github/workflows/            CI pipeline
 ```
 
 ## Roadmap
@@ -112,7 +121,7 @@ tests/                pytest test suite
 - [x] Project skeleton: FastAPI, tests, lint, CI, local database
 - [x] Data model: courses, lectures, summaries (SQLAlchemy + Alembic)
 - [ ] Calendar sync: today's lectures from Google Calendar
-- [x] OneDrive client: list and download lecture files via Microsoft Graph
+- [x] Google sign-in + Drive client: list and download lecture files
 - [ ] Lecture locator: find the previous and current lecture for a course
 - [ ] Processing: text extraction from PDF/PPTX, chunking, embeddings
 - [ ] Summarizer: recap and prep prompts, with quality evals
