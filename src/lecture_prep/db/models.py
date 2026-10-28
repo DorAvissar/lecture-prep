@@ -16,7 +16,9 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String(200), unique=True)
     # Alternative names matched against calendar event titles, e.g. ["לינארית", "Linear Algebra"].
     aliases: Mapped[list[str]] = mapped_column(ARRAY(String(200)), default=list)
-    onedrive_folder: Mapped[str] = mapped_column(String(500))
+    drive_folder: Mapped[str] = mapped_column(
+        String(500)
+    )  # path in Google Drive, e.g. "Lectures/Linear Algebra"
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lectures: Mapped[list["Lecture"]] = relationship(
@@ -32,7 +34,7 @@ class Lecture(Base):
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
     number: Mapped[int]  # order within the course: 1, 2, 3...
     title: Mapped[str | None] = mapped_column(String(300))
-    source_path: Mapped[str] = mapped_column(String(1000))  # file path inside OneDrive
+    source_path: Mapped[str] = mapped_column(String(1000))  # file path inside Google Drive
     held_on: Mapped[date | None]
     extracted_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

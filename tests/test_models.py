@@ -7,7 +7,7 @@ from lecture_prep.db.models import Course, Lecture, Summary, SummaryKind
 
 
 def make_course(**overrides) -> Course:
-    fields = {"name": "Linear Algebra", "aliases": ["לינארית"], "onedrive_folder": "/Uni/Linear Algebra"}
+    fields = {"name": "Linear Algebra", "aliases": ["לינארית"], "drive_folder": "Lectures/Linear Algebra"}
     return Course(**(fields | overrides))
 
 
