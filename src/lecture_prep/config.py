@@ -5,6 +5,7 @@ documented in .env.example.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,13 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     database_url: str = "postgresql+psycopg://lecture_prep:lecture_prep@localhost:5432/lecture_prep"
+
+    # Google (Calendar + Drive). The client file is downloaded from Google Cloud Console; the token file is
+    # written by `uv run python -m lecture_prep.google_api.login`. Both folders are git-ignored.
+    google_client_secret_path: Path = Path(".secrets/google_client_secret.json")
+    google_token_path: Path = Path(".cache/google_token.json")
+    # The Drive folder that holds one sub-folder per course, e.g. "Lectures".
+    drive_lectures_folder: str = "Lectures"
 
 
 @lru_cache
