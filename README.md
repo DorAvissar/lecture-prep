@@ -71,6 +71,22 @@ uv run alembic check          # models and migrations are in sync
 Database tests run the real migrations, then wrap every test in a transaction that is rolled back, so
 they never leave data behind.
 
+### Connecting OneDrive
+
+Lecture files are read from OneDrive through Microsoft Graph, with read-only access (`Files.Read`).
+
+1. In the [Microsoft Entra admin center](https://entra.microsoft.com/), open **App registrations → New
+   registration**. Supported account types: *Accounts in any organizational directory and personal
+   Microsoft accounts*. No redirect URI is needed.
+2. Under **Authentication**, set **Allow public client flows** to *Yes* (enables the device-code sign-in).
+3. Under **API permissions**, add *Microsoft Graph → Delegated → Files.Read*.
+4. Copy the **Application (client) ID** into `MS_CLIENT_ID` in `.env`.
+5. Sign in once - the token is cached in the git-ignored `.cache/` folder:
+
+```bash
+uv run python -m lecture_prep.onedrive.login
+```
+
 ### Changing the database schema
 
 ```bash
@@ -85,6 +101,7 @@ uv run alembic upgrade head
 ```
 src/lecture_prep/     application code
 src/lecture_prep/db/  database models and session
+src/lecture_prep/onedrive/  Microsoft sign-in and OneDrive file access
 migrations/           Alembic database migrations
 tests/                pytest test suite
 .github/workflows/    CI pipeline
@@ -95,7 +112,7 @@ tests/                pytest test suite
 - [x] Project skeleton: FastAPI, tests, lint, CI, local database
 - [x] Data model: courses, lectures, summaries (SQLAlchemy + Alembic)
 - [ ] Calendar sync: today's lectures from Google Calendar
-- [ ] OneDrive client: list and download lecture files via Microsoft Graph
+- [x] OneDrive client: list and download lecture files via Microsoft Graph
 - [ ] Lecture locator: find the previous and current lecture for a course
 - [ ] Processing: text extraction from PDF/PPTX, chunking, embeddings
 - [ ] Summarizer: recap and prep prompts, with quality evals
