@@ -53,6 +53,7 @@ uv sync                       # create .venv and install dependencies
 uv run pre-commit install     # run ruff before every commit
 cp .env.example .env          # then fill in real values
 docker compose up -d          # start Postgres + pgvector
+uv run alembic upgrade head   # create / update the database tables
 uv run uvicorn lecture_prep.main:app --reload
 ```
 
@@ -61,23 +62,38 @@ Then open <http://localhost:8000/health> or the interactive API docs at <http://
 ### Running checks
 
 ```bash
-uv run pytest                 # tests
+uv run pytest                 # tests (needs the database from docker compose)
 uv run ruff check .           # lint
 uv run ruff format .          # format
+uv run alembic check          # models and migrations are in sync
+```
+
+Database tests run the real migrations, then wrap every test in a transaction that is rolled back, so
+they never leave data behind.
+
+### Changing the database schema
+
+```bash
+# 1. edit the models in src/lecture_prep/db/models.py
+uv run alembic revision --autogenerate -m "describe the change"
+# 2. review the generated file in migrations/versions/ - autogenerate is a draft, not gospel
+uv run alembic upgrade head
 ```
 
 ## Project structure
 
 ```
-src/lecture_prep/   application code
-tests/              pytest test suite
-.github/workflows/  CI pipeline
+src/lecture_prep/     application code
+src/lecture_prep/db/  database models and session
+migrations/           Alembic database migrations
+tests/                pytest test suite
+.github/workflows/    CI pipeline
 ```
 
 ## Roadmap
 
 - [x] Project skeleton: FastAPI, tests, lint, CI, local database
-- [ ] Data model: courses, lectures, summaries, chunks (SQLAlchemy + Alembic)
+- [x] Data model: courses, lectures, summaries (SQLAlchemy + Alembic)
 - [ ] Calendar sync: today's lectures from Google Calendar
 - [ ] OneDrive client: list and download lecture files via Microsoft Graph
 - [ ] Lecture locator: find the previous and current lecture for a course
