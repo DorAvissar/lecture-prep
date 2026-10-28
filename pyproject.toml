@@ -23,3 +23,13 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.2.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+# Treat warnings as errors so deprecations surface early.
+filterwarnings = [
+    "error",
+    # Starlette's TestClient nudges toward httpx2; httpx is still supported.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
