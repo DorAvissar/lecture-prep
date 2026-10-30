@@ -7,6 +7,7 @@ Two kinds of summary (see SummaryKind):
 """
 
 import base64
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -14,6 +15,8 @@ import anthropic
 from anthropic.types.beta import BetaContentBlockParam
 
 from lecture_prep.db.models import SummaryKind
+
+log = logging.getLogger(__name__)
 
 MAX_TOKENS = 32000
 # On a safety decline, the API re-runs the request on a suitable fallback model inside the same call.
@@ -111,6 +114,15 @@ class Summarizer:
             fallbacks="default",
         ) as stream:
             message = stream.get_final_message()
+        usage = message.usage
+        log.info(
+            "%s for %s: %d input tokens, %d output tokens (%s)",
+            kind,
+            course_name,
+            usage.input_tokens,
+            usage.output_tokens,
+            message.model,
+        )
 
         if message.stop_reason == "refusal":
             raise SummaryError(f"the model declined to summarize this lecture ({message.stop_details})")

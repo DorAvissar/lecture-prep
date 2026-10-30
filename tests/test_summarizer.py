@@ -16,7 +16,10 @@ FILES = [LectureFile("03 - Integrals.pdf", b"%PDF-slides"), LectureFile("03 note
 def message(*texts: str, stop_reason: str = "end_turn", model: str = MODEL) -> SimpleNamespace:
     blocks = [SimpleNamespace(type="thinking", thinking="")]
     blocks += [SimpleNamespace(type="text", text=text) for text in texts]
-    return SimpleNamespace(content=blocks, stop_reason=stop_reason, stop_details=None, model=model)
+    usage = SimpleNamespace(input_tokens=5000, output_tokens=1500)
+    return SimpleNamespace(
+        content=blocks, stop_reason=stop_reason, stop_details=None, model=model, usage=usage
+    )
 
 
 class FakeClient:

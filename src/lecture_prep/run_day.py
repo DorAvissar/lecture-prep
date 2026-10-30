@@ -4,6 +4,7 @@ uv run python -m lecture_prep.run_day               # today
 uv run python -m lecture_prep.run_day 2026-11-02    # another day
 """
 
+import logging
 import sys
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -17,6 +18,9 @@ from lecture_prep.summarizer import Summarizer, claude_client
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    for noisy in ("httpx", "anthropic"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     settings = get_settings()
     tz = ZoneInfo(settings.timezone)
     day = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else datetime.now(tz).date()
