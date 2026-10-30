@@ -19,6 +19,8 @@ class Course(Base):
     drive_folder: Mapped[str] = mapped_column(
         String(500)
     )  # path in Google Drive, e.g. "Lectures/Linear Algebra"
+    # Counting starts here: the first lecture the app handles. Later lectures follow the calendar.
+    start_lecture: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lectures: Mapped[list["Lecture"]] = relationship(
@@ -33,10 +35,8 @@ class Lecture(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
     number: Mapped[int]  # order within the course: 1, 2, 3...
-    title: Mapped[str | None] = mapped_column(String(300))
-    source_path: Mapped[str] = mapped_column(String(1000))  # file path inside Google Drive
-    held_on: Mapped[date | None]
-    extracted_text: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(String(300))  # name of the lecture's first file
+    held_on: Mapped[date | None]  # the day it was taught; None until it shows up on the calendar
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     course: Mapped[Course] = relationship(back_populates="lectures")

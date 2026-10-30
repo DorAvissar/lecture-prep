@@ -7,6 +7,7 @@ documented in .env.example.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,8 @@ class Settings(BaseSettings):
     google_token_path: Path = Path(".cache/google_token.json")
     # The Drive folder that holds one sub-folder per course, e.g. "Lectures".
     drive_lectures_folder: str = "Lectures"
+    anthropic_api_key: SecretStr | None = None  # None: the SDK falls back to its own credential lookup
+    anthropic_model: str = "claude-opus-5-5"
 
 
 @lru_cache

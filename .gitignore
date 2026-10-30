@@ -27,3 +27,6 @@ credentials*.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Personal course list (see courses.example.toml)
+courses.toml

@@ -19,11 +19,9 @@ Telegram:
 flowchart LR
     Cal[Google Calendar] --> Sched[Scheduler<br/>07:00 + before each lecture]
     Sched --> Loc[Lecture Locator]
-    GD[Google Drive<br/>lecture files] --> Loc
-    Loc --> Proc[Text extraction<br/>+ chunking + embeddings]
-    Proc --> DB[(PostgreSQL<br/>+ pgvector)]
-    Proc --> Sum[Summarizer<br/>Claude API]
-    Sum --> DB
+    GD[Google Drive<br/>lecture PDFs] --> Loc
+    Loc --> Sum[Summarizer<br/>Claude API, reads the PDFs]
+    Sum --> DB[(PostgreSQL)]
     Sum --> TG[Telegram Bot]
     TG --> Mini[Telegram Mini App<br/>summary + chat]
     Mini --> API[FastAPI]
@@ -36,8 +34,8 @@ flowchart LR
 |---|---|---|
 | Language / API | Python 3.11, FastAPI | Strong AI/data ecosystem, typed, async-ready |
 | Packaging | [uv](https://docs.astral.sh/uv/) | Fast, reproducible installs via `uv.lock` |
-| Database | PostgreSQL + pgvector | One store for relational data and vector search |
-| LLM | Claude API | Summaries and lecture-aware Q&A |
+| Database | PostgreSQL | Courses, lectures and stored summaries |
+| LLM | Claude API (Claude Opus 5.5) | Reads lecture PDFs directly - slides, formulas and diagrams included |
 | Delivery | Telegram Bot + Mini App | Free push notifications and a custom UI without an app store |
 | Quality | pytest, ruff, pre-commit, GitHub Actions | Tests and lint on every commit and push |
 
@@ -96,6 +94,51 @@ Lecture files live in Google Drive under `DRIVE_LECTURES_FOLDER` (default `Lectu
 course. With [Google Drive for desktop](https://www.google.com/drive/download/) that folder is a normal
 folder on your computer.
 
+### Courses and lecture files
+
+Each course has a folder in Drive with a `הרצאות` (lectures) sub-folder. Only that sub-folder is read,
+so tutorials can live next to it. Every file in it **starts with its lecture number**; files with the
+same number belong to the same lecture. Only PDFs and native Google docs are used (save `.pptx` slides
+as PDF).
+
+```
+Lectures/
+  Calculus 2/
+    הרצאות/
+      1.pdf
+      2.pdf
+      2 - notes.pdf
+      3.pdf
+    תרגולים/            <- ignored
+```
+
+Lectures are **counted, not guessed from the files**: you set the next lecture once, and every day the
+course is on the calendar moves it one lecture forward. Events whose title contains `תרגול` are
+tutorials and do not count.
+
+List your courses in `courses.toml` (copy `courses.example.toml`), load them, and set where each one
+stands:
+
+```bash
+uv run python -m lecture_prep.courses                    # load courses.toml
+uv run python -m lecture_prep.courses next "חדו\"א 2" 5   # the next Calculus 2 lecture is lecture 5
+```
+
+If a lecture is cancelled but stays on the calendar, the count moves on anyway - run `next` again to
+fix it.
+
+### Running a day
+
+Put a Claude API key in `.env` (`ANTHROPIC_API_KEY`), then:
+
+```bash
+uv run python -m lecture_prep.run_day               # today
+uv run python -m lecture_prep.run_day 2026-11-02    # another day
+```
+
+For each lecture on the calendar it writes a recap of the previous lecture and a prep brief for today's,
+stores them, and prints them. Stored summaries are reused, so a second run costs nothing.
+
 ### Changing the database schema
 
 ```bash
@@ -108,7 +151,7 @@ uv run alembic upgrade head
 ## Project structure
 
 ```
-src/lecture_prep/             application code
+src/lecture_prep/             application code: lecture locator, summarizer, daily pipeline
 src/lecture_prep/db/          database models and session
 src/lecture_prep/google_api/  Google sign-in, Drive client (and Calendar sync)
 migrations/                   Alembic database migrations
@@ -122,9 +165,10 @@ tests/                        pytest test suite
 - [x] Data model: courses, lectures, summaries (SQLAlchemy + Alembic)
 - [x] Calendar sync: today's lectures from Google Calendar
 - [x] Google sign-in + Drive client: list and download lecture files
-- [ ] Lecture locator: find the previous and current lecture for a course
-- [ ] Processing: text extraction from PDF/PPTX, chunking, embeddings
-- [ ] Summarizer: recap and prep prompts, with quality evals
+- [x] Lecture locator: find the previous and current lecture for a course
+- [x] Summarizer: recap and prep prompts, lecture PDFs sent to Claude directly
+- [x] Daily pipeline: calendar -> files -> stored summaries
+- [ ] Summary quality evals
 - [ ] Scheduler + Telegram bot
-- [ ] Telegram Mini App with lecture-aware chat (RAG)
+- [ ] Telegram Mini App with lecture-aware chat
 - [ ] Cloud deployment

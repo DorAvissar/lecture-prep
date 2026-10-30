@@ -7,6 +7,9 @@ from zoneinfo import ZoneInfo
 from lecture_prep.db.models import Course
 from lecture_prep.google_api.calendar import CalendarClient, CalendarEvent
 
+# Events whose title contains one of these words are not lectures, even when they name a course.
+NOT_LECTURE_WORDS = ("תרגול",)  # e.g. "תרגול - חדוא 2"
+
 
 @dataclass(frozen=True)
 class ScheduledLecture:
@@ -34,6 +37,8 @@ def lectures_on(
     """The day's lectures: calendar events that match a course, keeping the calendar's order."""
     lectures = []
     for event in calendar.events_on(day, tz):
+        if any(word in event.title for word in NOT_LECTURE_WORDS):
+            continue
         course = match_course(event.title, courses)
         if course is not None:
             lectures.append(ScheduledLecture(course=course, event=event))
