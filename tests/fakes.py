@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 
 from lecture_prep.db.models import SummaryKind
 from lecture_prep.google_api.drive import DriveItem
-from lecture_prep.summarizer import LectureFile, SummaryResult
+from lecture_prep.llm import LectureFile
+from lecture_prep.summarizer import SummaryResult
 
 
 def pdf(name: str) -> DriveItem:

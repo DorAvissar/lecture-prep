@@ -20,7 +20,7 @@ flowchart LR
     Cal[Google Calendar] --> Sched[Scheduler<br/>07:00 + before each lecture]
     Sched --> Loc[Lecture Locator]
     GD[Google Drive<br/>lecture PDFs] --> Loc
-    Loc --> Sum[Summarizer<br/>Claude API, reads the PDFs]
+    Loc --> Sum[Summarizer<br/>Gemini, Claude as backup]
     Sum --> DB[(PostgreSQL)]
     Sum --> TG[Telegram Bot]
     TG --> Mini[Telegram Mini App<br/>summary + chat]
@@ -35,7 +35,7 @@ flowchart LR
 | Language / API | Python 3.11, FastAPI | Strong AI/data ecosystem, typed, async-ready |
 | Packaging | [uv](https://docs.astral.sh/uv/) | Fast, reproducible installs via `uv.lock` |
 | Database | PostgreSQL | Courses, lectures and stored summaries |
-| LLM | Claude API (Claude Opus 5.5) | Reads lecture PDFs directly - slides, formulas and diagrams included |
+| LLM | Gemini Pro, with Claude Sonnet 5.5 as backup | Read lecture PDFs directly; chosen by a blind comparison (below) |
 | Delivery | Telegram Bot + Mini App | Free push notifications and a custom UI without an app store |
 | Quality | pytest, ruff, pre-commit, GitHub Actions | Tests and lint on every commit and push |
 
@@ -142,9 +142,30 @@ uv run python -m lecture_prep.google_api.calendars
 CALENDAR_IDS=["primary", "<the shared calendar's id>"]
 ```
 
+### Choosing the model
+
+Summaries and chat go through one small interface (`llm.py`), so the provider is a setting:
+
+```
+LLM_PROVIDER=gemini               # or claude
+LLM_FALLBACK_PROVIDER=claude      # answers whenever the main model fails; empty for no backup
+LLM_FALLBACK_MODEL=claude-sonnet-5-5
+```
+
+The default came from a blind comparison on a real lecture: Gemini Pro, Claude Sonnet 5.5 and Claude
+Opus 5.5 each wrote the same prep brief and recap, shown as A, B and C in random order. Gemini Pro was
+preferred, then Sonnet, then Opus. Run one yourself (the page lands in the git-ignored `comparisons/`):
+
+```bash
+uv run python -m lecture_prep.compare "תכנות מערכות" 5
+```
+
+Gemini keys come from [Google AI Studio](https://aistudio.google.com) (`GEMINI_API_KEY`); a Gemini app
+subscription does not include API access.
+
 ### Running a day
 
-Put a Claude API key in `.env` (`ANTHROPIC_API_KEY`), then:
+Put the model keys in `.env` (`GEMINI_API_KEY`, and `ANTHROPIC_API_KEY` for the backup), then:
 
 ```bash
 uv run python -m lecture_prep.run_day               # today

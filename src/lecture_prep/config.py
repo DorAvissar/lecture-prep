@@ -6,6 +6,7 @@ documented in .env.example.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,8 +29,15 @@ class Settings(BaseSettings):
     calendar_ids: list[str] = ["primary"]
     # The Drive folder that holds one sub-folder per course, e.g. "Lectures".
     drive_lectures_folder: str = "Lectures"
+    # Which model writes summaries and answers questions: "claude" or "gemini". Gemini Pro won a blind
+    # comparison on a real lecture; Claude Sonnet (second place) answers whenever Gemini fails.
+    llm_provider: Literal["claude", "gemini"] = "gemini"
+    llm_fallback_provider: Literal["claude", "gemini"] | None = "claude"  # None: no backup
+    llm_fallback_model: str | None = "claude-sonnet-5-5"
     anthropic_api_key: SecretStr | None = None  # None: the SDK falls back to its own credential lookup
     anthropic_model: str = "claude-opus-5-5"
+    gemini_api_key: SecretStr | None = None  # from https://aistudio.google.com
+    gemini_model: str = "gemini-pro-latest"
 
     # Telegram. The token comes from @BotFather; find the chat id with
     # `uv run python -m lecture_prep.telegram.chat_id` after sending your bot any message.

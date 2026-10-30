@@ -23,7 +23,8 @@ from lecture_prep.db.models import SentMessage
 from lecture_prep.db.session import SessionLocal
 from lecture_prep.google_api.calendar import CalendarClient
 from lecture_prep.google_api.drive import DriveClient
-from lecture_prep.summarizer import Summarizer, claude_client
+from lecture_prep.llm import make_model
+from lecture_prep.summarizer import Summarizer
 from lecture_prep.telegram.client import Button, TelegramClient
 from lecture_prep.telegram.messages import morning_message, reminder_message
 
@@ -97,7 +98,6 @@ def main() -> None:
     settings = get_settings()
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID first (see the README).")
-    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
     schedule = Schedule(
         ZoneInfo(settings.timezone), settings.morning_hour, settings.reminder_minutes, settings.public_url
     )
@@ -108,7 +108,7 @@ def main() -> None:
         TelegramClient.from_token(settings.telegram_bot_token.get_secret_value()) as telegram,
         SessionLocal() as session,
     ):
-        writer = Summarizer(claude_client(api_key), settings.anthropic_model)
+        writer = Summarizer(make_model(settings))
         now = datetime.now().astimezone()
         sent = tick(session, calendar, drive, writer, telegram, settings.telegram_chat_id, schedule, now)
     log.info("Sent: %s", ", ".join(sent) or "nothing")
