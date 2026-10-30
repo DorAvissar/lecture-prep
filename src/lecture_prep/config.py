@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     # written by `uv run python -m lecture_prep.google_api.login`. Both folders are git-ignored.
     google_client_secret_path: Path = Path(".secrets/google_client_secret.json")
     google_token_path: Path = Path(".cache/google_token.json")
+    # In the cloud, the token file's content instead of the file itself.
+    google_token_json: SecretStr | None = None
     # Calendars to read lectures from: "primary" is your own; add the id of a calendar shared with you.
     calendar_ids: list[str] = ["primary"]
     # The Drive folder that holds one sub-folder per course, e.g. "Lectures".
@@ -48,6 +50,19 @@ class Settings(BaseSettings):
     # The app's public https address, e.g. https://lecture-prep.up.railway.app. Telegram buttons open the
     # Mini App there; until it is set, messages go without buttons.
     public_url: str | None = None
+
+    @field_validator("database_url")
+    @classmethod
+    def use_psycopg_driver(cls, url: str) -> str:
+        """Hosts like Railway hand out postgresql:// URLs; SQLAlchemy needs the driver named."""
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url.removeprefix(prefix)
+        return url
+
+    @property
+    def google_token_json_value(self) -> str | None:
+        return self.google_token_json.get_secret_value() if self.google_token_json else None
 
 
 @lru_cache

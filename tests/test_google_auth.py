@@ -53,3 +53,30 @@ def test_revoked_refresh_token_raises_a_clear_error(tmp_path: Path, monkeypatch:
 def test_login_without_client_file_points_to_the_readme(tmp_path: Path):
     with pytest.raises(GoogleAuthError, match="README"):
         login_interactive(tmp_path / "missing.json", tmp_path / "token.json")
+
+
+TOKEN_INFO = {
+    "token": "old",
+    "refresh_token": "refresh-456",
+    "client_id": "client.apps.googleusercontent.com",
+    "client_secret": "secret",
+    "token_uri": "https://oauth2.googleapis.com/token",
+}
+
+
+def test_token_json_from_the_environment_is_refreshed_in_memory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    def refresh(self, request):
+        self.token = "fresh-789"
+
+    monkeypatch.setattr(Credentials, "refresh", refresh)
+    missing_file = tmp_path / "no-token-file.json"
+
+    assert TokenSource(missing_file, json.dumps(TOKEN_INFO))() == "fresh-789"
+    assert not missing_file.exists()  # nothing is written in the cloud
+
+
+def test_broken_token_json_raises_a_clear_error(tmp_path: Path):
+    with pytest.raises(GoogleAuthError, match="GOOGLE_TOKEN_JSON"):
+        TokenSource(tmp_path / "x.json", "{not json")()

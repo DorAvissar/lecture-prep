@@ -210,6 +210,33 @@ one HTML file served by the FastAPI app (`/app`), with no front-end build.
   left-to-right segment inside the right-to-left page.
 - The chat is not stored; closing the page starts a new conversation.
 
+### Deploying to Railway
+
+One Docker image runs as two [Railway](https://railway.com) services next to a Postgres database:
+
+| Service | Start command | Schedule |
+|---|---|---|
+| `web` | the image's default: migrations, then the API and Mini App | always on, with a public domain |
+| `tick` | `python -m lecture_prep.tick` | cron `*/15 * * * *` |
+
+1. Create a project from this GitHub repository, add a **Postgres** database (keep the name `Postgres`),
+   and name the app service `web`. Under **Networking**, generate a public domain.
+2. Write the variables file and paste it into each service's **Variables -> Raw Editor**, then delete it:
+
+```bash
+uv run python -m lecture_prep.cloud_env    # writes railway.env (git-ignored, contains secrets)
+```
+
+3. Add a second service from the same repository named `tick`, with the start command and cron schedule
+   above, and the same variables.
+4. Load your courses into the cloud database, from your computer, using the Postgres service's public
+   connection URL:
+
+```bash
+DATABASE_URL="<public connection URL>" uv run python -m lecture_prep.courses
+DATABASE_URL="<public connection URL>" uv run python -m lecture_prep.courses next "<course>" <number>
+```
+
 ### Changing the database schema
 
 ```bash
@@ -244,4 +271,4 @@ tests/                        pytest test suite
 - [ ] Summary quality evals
 - [x] Scheduler + Telegram bot: morning message and lecture reminders
 - [x] Telegram Mini App: prep, recap and lecture-aware chat
-- [ ] Cloud deployment
+- [x] Cloud deployment: Docker image on Railway (web + 15-minute scheduler)

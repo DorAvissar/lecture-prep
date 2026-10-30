@@ -1,0 +1,13 @@
+# Only what the image needs; never secrets.
+.git
+.venv
+.env
+.env.*
+.cache
+.secrets
+courses.toml
+comparisons
+tests
+**/__pycache__
+.pytest_cache
+.ruff_cache
