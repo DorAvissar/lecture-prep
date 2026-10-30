@@ -1,4 +1,4 @@
-# One image for both cloud services: the web app (Mini App + API) and the 15-minute scheduler tick.
+# The cloud image: the web app (Mini App + API), which also runs scheduler ticks via POST /internal/tick.
 FROM python:3.11-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /bin/uv
@@ -18,6 +18,5 @@ COPY migrations ./migrations
 COPY src ./src
 RUN uv sync --locked --no-dev
 
-# Web service: bring the database schema up to date, then serve. The scheduler service overrides this
-# with: python -m lecture_prep.tick
+# Bring the database schema up to date, then serve.
 CMD ["sh", "-c", "alembic upgrade head && uvicorn lecture_prep.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
