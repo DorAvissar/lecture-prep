@@ -35,4 +35,4 @@ courses.toml
 comparisons/
 
 # Cloud variables with secrets (python -m lecture_prep.cloud_env)
-railway.env
+cloud.env

@@ -1,28 +1,31 @@
-"""Write the cloud's environment variables to railway.env (git-ignored), ready to paste into Railway:
+"""Write the cloud's environment variables to cloud.env (git-ignored), ready to paste into the host:
 
-    uv run python -m lecture_prep.cloud_env
+    uv run python -m lecture_prep.cloud_env "<database URL from Neon>"
 
-Values come from your .env and your Google token file. Database and public address are Railway
-reference variables, filled in by Railway itself: the Postgres service must be named "Postgres" and the
-web service "web". The file holds secrets - paste it, then delete it.
+Values come from your .env and your Google token file; TICK_SECRET is generated fresh, so the outside
+scheduler must send the same value. The file holds secrets - paste it, then delete it.
 """
 
 import json
+import secrets
+import sys
 from pathlib import Path
 
 from lecture_prep.config import Settings, get_settings
 
-OUTPUT = Path("railway.env")
+OUTPUT = Path("cloud.env")
 
 
-def cloud_variables(settings: Settings, google_token: str) -> dict[str, str]:
+def cloud_variables(
+    settings: Settings, google_token: str, database_url: str, tick_secret: str
+) -> dict[str, str]:
     def secret(value) -> str:
         return value.get_secret_value() if value is not None else ""
 
     return {
         "ENVIRONMENT": "production",
-        "DATABASE_URL": "${{Postgres.DATABASE_URL}}",
-        "PUBLIC_URL": "https://${{web.RAILWAY_PUBLIC_DOMAIN}}",
+        "DATABASE_URL": database_url,
+        "TICK_SECRET": tick_secret,
         "TIMEZONE": settings.timezone,
         "CALENDAR_IDS": json.dumps(settings.calendar_ids, ensure_ascii=False),
         "DRIVE_LECTURES_FOLDER": settings.drive_lectures_folder,
@@ -43,13 +46,13 @@ def cloud_variables(settings: Settings, google_token: str) -> dict[str, str]:
 
 def main() -> None:
     settings = get_settings()
+    database_url = sys.argv[1] if len(sys.argv) > 1 else ""
     google_token = settings.google_token_path.read_text(encoding="utf-8")
-    variables = cloud_variables(settings, google_token)
-    missing = [name for name, value in variables.items() if not value]
+    variables = cloud_variables(settings, google_token, database_url, secrets.token_urlsafe(32))
     OUTPUT.write_text("".join(f"{name}={value}\n" for name, value in variables.items()), encoding="utf-8")
-    print(
-        f"Wrote {len(variables)} variables to {OUTPUT.resolve()} (contains secrets - delete after pasting)."
-    )
+    print(f"Wrote {len(variables)} variables to {OUTPUT.resolve()}")
+    print("It contains secrets: paste it into the host, put TICK_SECRET in the scheduler, then delete it.")
+    missing = [name for name, value in variables.items() if not value]
     if missing:
         print("Empty, fill in before deploying:", ", ".join(missing))
 
