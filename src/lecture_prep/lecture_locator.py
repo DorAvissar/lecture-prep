@@ -1,8 +1,9 @@
-"""Find a course's current and previous lecture files in Google Drive.
+"""Find a lecture's files in Google Drive.
 
-Naming convention: every file in a course folder starts with its lecture number, e.g.
-"03 - Integrals.pdf" or "3 summary.pdf". All files with the same number belong to the same lecture.
-The highest number is today's lecture; the next one down is the previous lecture.
+Each course folder has a "הרצאות" (lectures) sub-folder; anything else in the course folder, such as
+tutorials, is ignored. Every file in the lectures folder starts with its lecture number, e.g.
+"3.pdf" or "03 - Integrals.pdf", and all files with the same number belong to the same lecture.
+Which number is taught today is decided elsewhere (see daily.py) - here we only find the files.
 """
 
 import logging
@@ -18,6 +19,7 @@ log = logging.getLogger(__name__)
 
 LECTURE_NUMBER = re.compile(r"^\s*(\d+)")
 PDF_MIME = "application/pdf"
+LECTURES_SUBFOLDER = "הרצאות"
 
 
 class Drive(Protocol):
@@ -30,12 +32,6 @@ class Drive(Protocol):
 class LectureMaterial:
     number: int
     files: tuple[DriveItem, ...]  # sorted by name
-
-
-@dataclass(frozen=True)
-class CourseMaterial:
-    current: LectureMaterial | None  # None when the folder has no numbered files yet
-    previous: LectureMaterial | None  # None when the course has only one lecture so far
 
 
 def lecture_number(filename: str) -> int | None:
@@ -66,10 +62,11 @@ def group_by_lecture(items: list[DriveItem]) -> list[LectureMaterial]:
     ]
 
 
-def locate(drive: Drive, course: Course) -> CourseMaterial:
-    """Return the current and previous lecture of `course`, read from its Drive folder."""
-    lectures = group_by_lecture(drive.list_folder(course.drive_folder))
-    return CourseMaterial(
-        current=lectures[-1] if lectures else None,
-        previous=lectures[-2] if len(lectures) >= 2 else None,
-    )
+def lectures_folder(course: Course) -> str:
+    return f"{course.drive_folder.rstrip('/')}/{LECTURES_SUBFOLDER}"
+
+
+def course_lectures(drive: Drive, course: Course) -> dict[int, LectureMaterial]:
+    """All of a course's lectures found in Drive, by lecture number."""
+    lectures = group_by_lecture(drive.list_folder(lectures_folder(course)))
+    return {lecture.number: lecture for lecture in lectures}

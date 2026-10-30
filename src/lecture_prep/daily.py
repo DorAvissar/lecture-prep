@@ -1,8 +1,11 @@
 """The daily run: today's lectures from the calendar -> their files in Drive -> recap and prep summaries.
 
-Summaries are stored, so running twice on the same day costs nothing the second time.
+Lectures are counted, not guessed from the files: a course starts at its start_lecture, and each day
+the course is on the calendar moves it one lecture forward. Summaries are stored, so running twice on
+the same day costs nothing the second time.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
@@ -15,8 +18,10 @@ from lecture_prep.calendar_sync import ScheduledLecture, lectures_on
 from lecture_prep.db.models import Course, Lecture, Summary, SummaryKind
 from lecture_prep.google_api.calendar import CalendarClient, CalendarEvent
 from lecture_prep.google_api.drive import DriveItem
-from lecture_prep.lecture_locator import LectureMaterial, locate
+from lecture_prep.lecture_locator import LectureMaterial, course_lectures
 from lecture_prep.summarizer import LectureFile, SummaryResult
+
+log = logging.getLogger(__name__)
 
 
 class Drive(Protocol):
@@ -34,8 +39,9 @@ class Writer(Protocol):
 class LectureBrief:
     course: Course
     event: CalendarEvent
-    prep: Summary | None  # None when today's material is not in Drive yet
-    recap: Summary | None  # None for the course's first lecture
+    number: int  # today's lecture number
+    prep: Summary | None  # None when today's lecture has no files in Drive
+    recap: Summary | None  # None when the previous lecture has no files (or this is lecture 1)
 
 
 def prepare_day(
@@ -52,25 +58,40 @@ def prepare_lecture(
     session: Session, drive: Drive, writer: Writer, scheduled: ScheduledLecture, day: date
 ) -> LectureBrief:
     course = scheduled.course
-    material = locate(drive, course)
-    today, before = material.current, material.previous
+    number = todays_number(session, course, day)
+    get_or_create_lecture(session, course, number).held_on = day
+    session.commit()
 
-    if today is not None:
-        lecture = get_or_create_lecture(session, course, today)
-        if lecture.held_on is not None and lecture.held_on < day:
-            # The newest files were already taught on an earlier day: today's material is not uploaded
-            # yet. The newest lecture is then the one to recap.
-            today, before = None, today
-        else:
-            lecture.held_on = day
-            session.commit()
+    lectures = course_lectures(drive, course)
+    today, before = lectures.get(number), lectures.get(number - 1)
+    if today is None:
+        log.warning("No files for lecture %d of %s in Drive", number, course.name)
 
     return LectureBrief(
         course=course,
         event=scheduled.event,
+        number=number,
         prep=summary_for(session, drive, writer, course, today, SummaryKind.PREP) if today else None,
         recap=summary_for(session, drive, writer, course, before, SummaryKind.RECAP) if before else None,
     )
+
+
+def todays_number(session: Session, course: Course, day: date) -> int:
+    """The lecture taught on `day`: one past the last lecture taught before it, never below start_lecture.
+
+    A lecture already marked for `day` keeps its number, so a second run (or a double session) on the
+    same day does not move the count.
+    """
+    held = session.execute(
+        select(Lecture.number, Lecture.held_on).where(
+            Lecture.course_id == course.id, Lecture.held_on.is_not(None)
+        )
+    ).all()
+    for number, held_on in held:
+        if held_on == day:
+            return number
+    earlier = [number for number, held_on in held if held_on < day]
+    return max([course.start_lecture, *(number + 1 for number in earlier)])
 
 
 def summary_for(
@@ -82,7 +103,8 @@ def summary_for(
     kind: SummaryKind,
 ) -> Summary:
     """The stored summary of this kind, or a new one written now and saved straight away."""
-    lecture = get_or_create_lecture(session, course, material)
+    lecture = get_or_create_lecture(session, course, material.number)
+    lecture.title = material.files[0].name
     existing = next((summary for summary in lecture.summaries if summary.kind == kind), None)
     if existing is not None:
         return existing
@@ -95,12 +117,10 @@ def summary_for(
     return summary
 
 
-def get_or_create_lecture(session: Session, course: Course, material: LectureMaterial) -> Lecture:
-    lecture = session.scalar(
-        select(Lecture).where(Lecture.course_id == course.id, Lecture.number == material.number)
-    )
+def get_or_create_lecture(session: Session, course: Course, number: int) -> Lecture:
+    lecture = session.scalar(select(Lecture).where(Lecture.course_id == course.id, Lecture.number == number))
     if lecture is None:
-        lecture = Lecture(number=material.number, title=material.files[0].name)
+        lecture = Lecture(number=number)
         course.lectures.append(lecture)
         session.flush()
     return lecture

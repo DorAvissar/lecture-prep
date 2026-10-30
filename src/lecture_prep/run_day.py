@@ -38,7 +38,7 @@ def main() -> None:
 
 def print_brief(brief: LectureBrief, tz: ZoneInfo) -> None:
     print("=" * 70)
-    print(f"{brief.course.name}  {brief.event.start.astimezone(tz):%H:%M}")
+    print(f"{brief.course.name}  lecture {brief.number}  {brief.event.start.astimezone(tz):%H:%M}")
     for title, summary in (("Recap", brief.recap), ("Prep", brief.prep)):
         print(f"\n--- {title} ---")
         print(summary.content if summary else "(no material)")

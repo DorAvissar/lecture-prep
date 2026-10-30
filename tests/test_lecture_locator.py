@@ -5,13 +5,7 @@ from datetime import UTC, datetime
 
 from lecture_prep.db.models import Course
 from lecture_prep.google_api.drive import FOLDER_MIME, DriveItem
-from lecture_prep.lecture_locator import (
-    CourseMaterial,
-    LectureMaterial,
-    group_by_lecture,
-    lecture_number,
-    locate,
-)
+from lecture_prep.lecture_locator import LectureMaterial, course_lectures, group_by_lecture, lecture_number
 
 PDF = "application/pdf"
 CALCULUS = Course(name="חדוא 2", aliases=[], drive_folder="Lectures/Calculus 2")
@@ -79,31 +73,18 @@ def test_skips_folders_unnumbered_and_unsupported_files(caplog):
     assert "04 - Series.pptx" in caplog.text
 
 
-def test_locate_returns_highest_as_current_and_next_highest_as_previous():
-    one, two, three = item("01.pdf"), item("02.pdf"), item("03.pdf")
-    drive = FakeDrive([three, one, two])
+def test_course_lectures_reads_the_lectures_subfolder_by_number():
+    one, two_slides, two_notes = item("1.pdf"), item("2.pdf"), item("2 notes.pdf")
+    drive = FakeDrive([two_slides, one, two_notes])
 
-    material = locate(drive, CALCULUS)
+    lectures = course_lectures(drive, CALCULUS)
 
-    assert material == CourseMaterial(
-        current=LectureMaterial(3, (three,)), previous=LectureMaterial(2, (two,))
-    )
-    assert drive.asked == ["Lectures/Calculus 2"]
-
-
-def test_previous_skips_gaps_in_numbering():
-    material = locate(FakeDrive([item("01.pdf"), item("04.pdf")]), CALCULUS)
-
-    assert material.previous is not None
-    assert material.previous.number == 1
+    assert lectures == {
+        1: LectureMaterial(1, (one,)),
+        2: LectureMaterial(2, (two_notes, two_slides)),
+    }
+    assert drive.asked == ["Lectures/Calculus 2/הרצאות"]
 
 
-def test_first_lecture_has_no_previous():
-    material = locate(FakeDrive([item("01.pdf")]), CALCULUS)
-
-    assert material.current == LectureMaterial(1, (item("01.pdf"),))
-    assert material.previous is None
-
-
-def test_empty_folder():
-    assert locate(FakeDrive([]), CALCULUS) == CourseMaterial(current=None, previous=None)
+def test_course_lectures_of_an_empty_folder():
+    assert course_lectures(FakeDrive([]), CALCULUS) == {}

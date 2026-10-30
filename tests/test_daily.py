@@ -20,7 +20,7 @@ def pdf(name: str) -> DriveItem:
     return DriveItem(
         id=name,
         name=name,
-        path=f"/Lectures/Calculus/{name}",
+        path=f"/Lectures/Calculus/הרצאות/{name}",
         mime_type="application/pdf",
         size=10,
         modified_at=datetime(2026, 10, 1, tzinfo=UTC),
@@ -45,6 +45,7 @@ class FakeDrive:
         self.downloaded: list[str] = []
 
     def list_folder(self, path: str) -> list[DriveItem]:
+        assert path == "Lectures/Calculus/הרצאות"
         return self.items
 
     def download(self, item: DriveItem) -> bytes:
@@ -61,74 +62,102 @@ class FakeWriter:
         return SummaryResult(content=f"{kind} of {files[0].name}", model="fake-model")
 
 
+ALL_LECTURES = [pdf("1.pdf"), pdf("2 slides.pdf"), pdf("2 notes.pdf"), pdf("3.pdf"), pdf("4.pdf")]
+NEXT_WEEK = MONDAY + timedelta(7)
+
+
 @pytest.fixture
 def calculus(db_session: Session) -> Course:
-    course = Course(name="Calculus", aliases=["חדוא"], drive_folder="Lectures/Calculus")
+    course = Course(name="Calculus", aliases=["חדוא"], drive_folder="Lectures/Calculus", start_lecture=2)
     db_session.add(course)
     db_session.commit()
     return course
 
 
-def test_writes_prep_for_today_and_recap_for_the_previous_lecture(db_session, calculus):
-    drive = FakeDrive(pdf("01.pdf"), pdf("02 slides.pdf"), pdf("02 notes.pdf"))
-    writer = FakeWriter()
+def run(db_session, day=MONDAY, title="חדוא - הרצאה", drive=None, writer=None):
+    drive = drive or FakeDrive(*ALL_LECTURES)
+    writer = writer or FakeWriter()
+    return prepare_day(db_session, FakeCalendar(title), drive, writer, day, TZ), writer
 
-    [brief] = prepare_day(db_session, FakeCalendar("חדוא - הרצאה"), drive, writer, MONDAY, TZ)
+
+def test_first_run_starts_at_start_lecture(db_session, calculus):
+    [brief], writer = run(db_session)
 
     assert brief.course is calculus
-    assert brief.prep is not None and brief.prep.content == "prep of 02 notes.pdf"
-    assert brief.recap is not None and brief.recap.content == "recap of 01.pdf"
+    assert brief.number == 2
+    assert brief.prep is not None and brief.prep.content == "prep of 2 notes.pdf"
+    assert brief.recap is not None and brief.recap.content == "recap of 1.pdf"
     assert writer.calls == [
-        (SummaryKind.PREP, ["02 notes.pdf", "02 slides.pdf"]),
-        (SummaryKind.RECAP, ["01.pdf"]),
+        (SummaryKind.PREP, ["2 notes.pdf", "2 slides.pdf"]),
+        (SummaryKind.RECAP, ["1.pdf"]),
     ]
-    assert [(lecture.number, lecture.held_on) for lecture in calculus.lectures] == [(1, None), (2, MONDAY)]
 
 
-def test_a_second_run_reuses_stored_summaries(db_session, calculus):
-    drive, writer = FakeDrive(pdf("01.pdf"), pdf("02.pdf")), FakeWriter()
-    prepare_day(db_session, FakeCalendar("Calculus"), drive, writer, MONDAY, TZ)
+def test_each_lecture_day_moves_one_lecture_forward(db_session, calculus):
+    run(db_session)
 
-    [brief] = prepare_day(db_session, FakeCalendar("Calculus"), drive, writer, MONDAY, TZ)
+    [brief], _ = run(db_session, day=NEXT_WEEK)
 
+    assert brief.number == 3
+    assert brief.prep is not None and brief.prep.content == "prep of 3.pdf"
+    assert brief.recap is not None and brief.recap.content == "recap of 2 notes.pdf"
+    assert [(lecture.number, lecture.held_on) for lecture in calculus.lectures] == [
+        (1, None),
+        (2, MONDAY),
+        (3, NEXT_WEEK),
+    ]
+
+
+def test_a_second_run_on_the_same_day_reuses_everything(db_session, calculus):
+    writer = FakeWriter()
+    run(db_session, writer=writer)
+
+    [brief], _ = run(db_session, writer=writer)
+
+    assert brief.number == 2
     assert len(writer.calls) == 2
-    assert brief.prep is not None and brief.prep.model == "fake-model"
 
 
-def test_next_week_the_old_prep_lecture_gets_a_recap(db_session, calculus):
-    drive, writer = FakeDrive(pdf("01.pdf"), pdf("02.pdf")), FakeWriter()
-    prepare_day(db_session, FakeCalendar("Calculus"), drive, writer, MONDAY, TZ)
-    drive.items.append(pdf("03.pdf"))
+def test_days_without_the_course_do_not_count(db_session, calculus):
+    run(db_session)
+    run(db_session, day=MONDAY + timedelta(1), title="Dentist")
 
-    [brief] = prepare_day(db_session, FakeCalendar("Calculus"), drive, writer, MONDAY + timedelta(7), TZ)
+    [brief], _ = run(db_session, day=NEXT_WEEK)
 
-    assert brief.prep is not None and brief.prep.content == "prep of 03.pdf"
-    assert brief.recap is not None and brief.recap.content == "recap of 02.pdf"
+    assert brief.number == 3
 
 
-def test_when_todays_files_are_missing_only_the_last_lecture_is_recapped(db_session, calculus):
-    drive, writer = FakeDrive(pdf("01.pdf"), pdf("02.pdf")), FakeWriter()
-    prepare_day(db_session, FakeCalendar("Calculus"), drive, writer, MONDAY, TZ)
+def test_a_raised_start_lecture_skips_ahead(db_session, calculus):
+    run(db_session)
+    calculus.start_lecture = 4
+    db_session.commit()
 
-    [brief] = prepare_day(db_session, FakeCalendar("Calculus"), drive, writer, MONDAY + timedelta(7), TZ)
+    [brief], _ = run(db_session, day=NEXT_WEEK)
 
+    assert brief.number == 4
+
+
+def test_lecture_without_files_has_no_prep(db_session, calculus):
+    [brief], _ = run(db_session, drive=FakeDrive(pdf("1.pdf")))
+
+    assert brief.number == 2
     assert brief.prep is None
-    assert brief.recap is not None and brief.recap.content == "recap of 02.pdf"
+    assert brief.recap is not None
 
 
-def test_first_lecture_has_prep_only(db_session, calculus):
-    [brief] = prepare_day(
-        db_session, FakeCalendar("Calculus"), FakeDrive(pdf("01.pdf")), FakeWriter(), MONDAY, TZ
-    )
+def test_first_lecture_of_the_course_has_no_recap(db_session, calculus):
+    calculus.start_lecture = 1
+    db_session.commit()
+
+    [brief], _ = run(db_session)
 
     assert brief.prep is not None
     assert brief.recap is None
 
 
-def test_events_that_are_not_lectures_are_ignored(db_session, calculus):
+def test_tutorials_and_other_events_are_ignored(db_session, calculus):
     writer = FakeWriter()
 
-    assert (
-        prepare_day(db_session, FakeCalendar("Dentist"), FakeDrive(pdf("01.pdf")), writer, MONDAY, TZ) == []
-    )
+    assert run(db_session, title="תרגול - חדוא", writer=writer)[0] == []
+    assert run(db_session, title="Dentist", writer=writer)[0] == []
     assert writer.calls == []

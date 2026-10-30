@@ -19,6 +19,8 @@ class Course(Base):
     drive_folder: Mapped[str] = mapped_column(
         String(500)
     )  # path in Google Drive, e.g. "Lectures/Linear Algebra"
+    # Counting starts here: the first lecture the app handles. Later lectures follow the calendar.
+    start_lecture: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lectures: Mapped[list["Lecture"]] = relationship(
