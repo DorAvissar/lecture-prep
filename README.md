@@ -96,24 +96,36 @@ folder on your computer.
 
 ### Courses and lecture files
 
-Each course has a folder in Drive. Every file in it **starts with its lecture number**; files with the
-same number belong to the same lecture. Only PDFs and native Google docs are used (save `.pptx` slides as
-PDF). The highest number is today's lecture, the one below it is the previous lecture.
+Each course has a folder in Drive with a `הרצאות` (lectures) sub-folder. Only that sub-folder is read,
+so tutorials can live next to it. Every file in it **starts with its lecture number**; files with the
+same number belong to the same lecture. Only PDFs and native Google docs are used (save `.pptx` slides
+as PDF).
 
 ```
 Lectures/
   Calculus 2/
-    01 - Limits.pdf
-    02 - Derivatives.pdf
-    02 - Derivatives (notes).pdf
-    03 - Integrals.pdf
+    הרצאות/
+      1.pdf
+      2.pdf
+      2 - notes.pdf
+      3.pdf
+    תרגולים/            <- ignored
 ```
 
-List your courses in `courses.toml` (copy `courses.example.toml`), then load them:
+Lectures are **counted, not guessed from the files**: you set the next lecture once, and every day the
+course is on the calendar moves it one lecture forward. Events whose title contains `תרגול` are
+tutorials and do not count.
+
+List your courses in `courses.toml` (copy `courses.example.toml`), load them, and set where each one
+stands:
 
 ```bash
-uv run python -m lecture_prep.courses
+uv run python -m lecture_prep.courses                    # load courses.toml
+uv run python -m lecture_prep.courses next "חדו\"א 2" 5   # the next Calculus 2 lecture is lecture 5
 ```
+
+If a lecture is cancelled but stays on the calendar, the count moves on anyway - run `next` again to
+fix it.
 
 ### Running a day
 

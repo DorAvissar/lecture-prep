@@ -2,7 +2,9 @@
 #
 # name:         the course name; matched against calendar event titles (case-insensitive)
 # aliases:      other spellings that appear in calendar titles
-# drive_folder: the course folder in Google Drive, whose files start with the lecture number
+# drive_folder: the course folder in Google Drive; lecture files go in its "הרצאות" sub-folder
+#
+# Then set each course's next lecture: uv run python -m lecture_prep.courses next "<name>" <number>
 
 [[course]]
 name = "חדו\"א 2"
