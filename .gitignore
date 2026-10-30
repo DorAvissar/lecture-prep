@@ -30,3 +30,6 @@ Thumbs.db
 
 # Personal course list (see courses.example.toml)
 courses.toml
+
+# Blind model comparisons (python -m lecture_prep.compare)
+comparisons/
