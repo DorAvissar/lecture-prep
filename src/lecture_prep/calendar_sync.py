@@ -21,10 +21,14 @@ def match_course(event_title: str, courses: list[Course]) -> Course | None:
     """Return the course whose name or one of its aliases appears in the event title, or None.
 
     - Matching ignores upper/lower case.
-    - If several courses match, the longest matching name wins ("Linear Algebra 2" beats "Linear Algebra").
     - Empty names never match.
     """
-    raise NotImplementedError("Task 1 - yours to write")
+    for course in courses:
+        names = [course.name] + course.aliases
+        for name in names:
+            if name != "" and name.lower() in event_title.lower():
+                return course
+    return None
 
 
 def lectures_on(
