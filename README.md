@@ -36,6 +36,7 @@ flowchart LR
 | Packaging | [uv](https://docs.astral.sh/uv/) | Fast, reproducible installs via `uv.lock` |
 | Database | PostgreSQL | Courses, lectures and stored summaries |
 | LLM | Gemini Pro, with Claude Sonnet 5.5 as backup | Read lecture PDFs directly; chosen by a blind comparison (below) |
+| Hosting | Render + Neon + a cron service, all free tiers | $0 a month; see Deploying for free |
 | Delivery | Telegram Bot + Mini App | Free push notifications and a custom UI without an app store |
 | Quality | pytest, ruff, pre-commit, GitHub Actions | Tests and lint on every commit and push |
 
@@ -210,31 +211,37 @@ one HTML file served by the FastAPI app (`/app`), with no front-end build.
   left-to-right segment inside the right-to-left page.
 - The chat is not stored; closing the page starts a new conversation.
 
-### Deploying to Railway
+### Deploying for free
 
-One Docker image runs as two [Railway](https://railway.com) services next to a Postgres database:
+The app runs for $0 on three free services:
 
-| Service | Start command | Schedule |
+| Part | Service | Why |
 |---|---|---|
-| `web` | the image's default: migrations, then the API and Mini App | always on, with a public domain |
-| `tick` | `python -m lecture_prep.tick` | cron `*/15 * * * *` |
+| Web app (API + Mini App) | [Render](https://render.com) free web service, from the Dockerfile | https address for the Mini App |
+| Database | [Neon](https://neon.com) free Postgres | does not expire, no credit card |
+| Scheduler | a free cron service, e.g. [cron-job.org](https://cron-job.org) | calls the app every 10 minutes |
 
-1. Create a project from this GitHub repository, add a **Postgres** database (keep the name `Postgres`),
-   and name the app service `web`. Under **Networking**, generate a public domain.
-2. Write the variables file and paste it into each service's **Variables -> Raw Editor**, then delete it:
+Free Render services have no scheduler and fall asleep after 15 idle minutes, so the cron service calls
+`POST /internal/tick` every 10 minutes with the header `X-Tick-Secret`. Each call runs one tick in the
+background and keeps the server awake, so the Mini App opens without a cold start.
+
+1. **Neon**: create a project and copy its connection string.
+2. Write the variables file (git-ignored, contains secrets):
 
 ```bash
-uv run python -m lecture_prep.cloud_env    # writes railway.env (git-ignored, contains secrets)
+uv run python -m lecture_prep.cloud_env "<Neon connection string>"    # writes cloud.env
 ```
 
-3. Add a second service from the same repository named `tick`, with the start command and cron schedule
-   above, and the same variables.
-4. Load your courses into the cloud database, from your computer, using the Postgres service's public
-   connection URL:
+3. **Render**: New -> Web Service from this repository, language **Docker**, instance type **Free**. Paste
+   `cloud.env` under **Environment -> Add from .env**. Render sets `RENDER_EXTERNAL_URL`, which the app
+   uses as its public address; the container runs the migrations when it starts.
+4. **Cron service**: every 10 minutes, `POST https://<your-app>.onrender.com/internal/tick` with the header
+   `X-Tick-Secret: <TICK_SECRET from cloud.env>`. Then delete `cloud.env`.
+5. Load your courses into the cloud database, from your computer:
 
 ```bash
-DATABASE_URL="<public connection URL>" uv run python -m lecture_prep.courses
-DATABASE_URL="<public connection URL>" uv run python -m lecture_prep.courses next "<course>" <number>
+DATABASE_URL="<Neon connection string>" uv run python -m lecture_prep.courses
+DATABASE_URL="<Neon connection string>" uv run python -m lecture_prep.courses next "<course>" <number>
 ```
 
 ### Changing the database schema
@@ -271,4 +278,4 @@ tests/                        pytest test suite
 - [ ] Summary quality evals
 - [x] Scheduler + Telegram bot: morning message and lecture reminders
 - [x] Telegram Mini App: prep, recap and lecture-aware chat
-- [x] Cloud deployment: Docker image on Railway (web + 15-minute scheduler)
+- [x] Cloud deployment: Docker image on Render, Neon Postgres, outside cron every 10 minutes

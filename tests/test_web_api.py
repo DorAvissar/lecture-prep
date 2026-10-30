@@ -58,7 +58,11 @@ def chat() -> FakeChat:
 def make_client(db_session: Session, chat: FakeChat, environment: str = "production") -> TestClient:
     app = create_app()
     settings = Settings(
-        _env_file=None, environment=environment, telegram_bot_token=TOKEN, telegram_chat_id=OWNER
+        _env_file=None,
+        environment=environment,
+        database_url="postgresql+psycopg://user:pw@cloud-db/app",  # never used: the session is overridden
+        telegram_bot_token=TOKEN,
+        telegram_chat_id=OWNER,
     )
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_session] = lambda: db_session

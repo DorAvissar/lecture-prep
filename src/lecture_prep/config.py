@@ -6,10 +6,12 @@ documented in .env.example.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LOCAL_DATABASE_URL = "postgresql+psycopg://lecture_prep:lecture_prep@localhost:5432/lecture_prep"
 
 
 class Settings(BaseSettings):
@@ -17,7 +19,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     environment: str = "development"
-    database_url: str = "postgresql+psycopg://lecture_prep:lecture_prep@localhost:5432/lecture_prep"
+    database_url: str = LOCAL_DATABASE_URL
     # Your local time zone: "today" and lecture times are computed in it (IANA name).
     timezone: str = "Asia/Jerusalem"
 
@@ -49,7 +51,12 @@ class Settings(BaseSettings):
     reminder_minutes: int = 30  # how long before a lecture its reminder is sent
     # The app's public https address, e.g. https://lecture-prep.up.railway.app. Telegram buttons open the
     # Mini App there; until it is set, messages go without buttons.
-    public_url: str | None = None
+    # Render sets RENDER_EXTERNAL_URL on its own, so there it needs no setting.
+    public_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("PUBLIC_URL", "RENDER_EXTERNAL_URL")
+    )
+    # Password for POST /internal/tick, the address an outside scheduler calls to run a tick.
+    tick_secret: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -59,6 +66,12 @@ class Settings(BaseSettings):
             if url.startswith(prefix):
                 return "postgresql+psycopg://" + url.removeprefix(prefix)
         return url
+
+    @model_validator(mode="after")
+    def production_needs_a_real_database(self) -> Self:
+        if self.environment == "production" and self.database_url == LOCAL_DATABASE_URL:
+            raise ValueError("DATABASE_URL is not set - in production it must point to the cloud database")
+        return self
 
     @property
     def google_token_json_value(self) -> str | None:

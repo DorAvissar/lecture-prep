@@ -1,4 +1,5 @@
-"""One scheduler tick. Run it every 15 minutes (a cron job in the cloud):
+"""One scheduler tick. Run it every 10-15 minutes - from the command line, or in the cloud by calling
+POST /internal/tick (see web/internal.py):
 
     uv run python -m lecture_prep.tick
 
@@ -17,7 +18,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from lecture_prep.config import get_settings
+from lecture_prep.config import Settings, get_settings
 from lecture_prep.daily import Drive, Writer, prepare_day
 from lecture_prep.db.models import SentMessage
 from lecture_prep.db.session import SessionLocal
@@ -93,15 +94,17 @@ def mark_sent(session: Session, kind: str, day: date, event_id: str = "") -> Non
     session.commit()
 
 
-def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    settings = get_settings()
+class NotConfigured(RuntimeError):
+    """Telegram is not set up yet."""
+
+
+def run_once(settings: Settings) -> list[str]:
+    """One tick with the real calendar, Drive, model and Telegram. Returns what was sent."""
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
-        raise SystemExit("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID first (see the README).")
+        raise NotConfigured("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID first (see the README).")
     schedule = Schedule(
         ZoneInfo(settings.timezone), settings.morning_hour, settings.reminder_minutes, settings.public_url
     )
-
     with (
         CalendarClient.from_settings(settings) as calendar,
         DriveClient.from_settings(settings) as drive,
@@ -112,6 +115,15 @@ def main() -> None:
         now = datetime.now().astimezone()
         sent = tick(session, calendar, drive, writer, telegram, settings.telegram_chat_id, schedule, now)
     log.info("Sent: %s", ", ".join(sent) or "nothing")
+    return sent
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    try:
+        run_once(get_settings())
+    except NotConfigured as error:
+        raise SystemExit(str(error)) from error
 
 
 if __name__ == "__main__":
