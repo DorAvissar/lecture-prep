@@ -13,7 +13,7 @@ from lecture_prep.telegram.client import Button
 from lecture_prep.tick import Schedule, tick
 
 TZ = ZoneInfo("Asia/Jerusalem")
-SCHEDULE = Schedule(tz=TZ, morning_hour=7, reminder_minutes=30)
+SCHEDULE = Schedule(tz=TZ, morning_hour=7, reminder_minutes=30, app_url="https://app.example.com")
 LECTURE_START = datetime(2026, 11, 2, 10, 0, tzinfo=TZ)
 
 
@@ -31,10 +31,10 @@ class FakeCalendar:
 
 class FakeTelegram:
     def __init__(self) -> None:
-        self.sent: list[tuple[int, str]] = []
+        self.sent: list[tuple[int, str, list[Button]]] = []
 
     def send_message(self, chat_id: int, html: str, buttons: list[Button] | None = None) -> None:
-        self.sent.append((chat_id, html))
+        self.sent.append((chat_id, html, buttons or []))
 
 
 @pytest.fixture
@@ -62,11 +62,12 @@ def test_morning_message_is_sent_once(db_session, calculus):
 
     assert run(db_session, LECTURE_START.replace(hour=7), telegram) == ["morning"]
     assert run(db_session, LECTURE_START.replace(hour=7, minute=15), telegram) == []
-    overview, recap, prep = (html for _, html in telegram.sent)
-    assert all(chat_id == 99 for chat_id, _ in telegram.sent)
-    assert "Calculus - הרצאה 2" in overview
-    assert "recap of 1.pdf" in recap
-    assert "prep of 2.pdf" in prep
+    [(chat_id, text, buttons)] = telegram.sent
+    assert chat_id == 99
+    assert "Calculus - הרצאה 2" in text
+    assert [button.url for button in buttons] == [
+        f"https://app.example.com/app?course={calculus.id}&lecture=2"
+    ]
 
 
 def test_reminder_is_sent_once_shortly_before_the_lecture(db_session, calculus):

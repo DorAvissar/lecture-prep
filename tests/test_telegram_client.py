@@ -45,13 +45,16 @@ def test_buttons_go_one_per_row():
         seen.append(json.loads(request.content))
         return ok()
 
-    buttons = [Button("Recap", "https://example.com/1"), Button("Prep", "https://example.com/2")]
+    buttons = [
+        Button("Recap", "https://example.com/1"),
+        Button("Prep", "https://example.com/2", web_app=True),
+    ]
     make_client(handler).send_message(42, "hi", buttons)
 
     assert seen[0]["reply_markup"] == {
         "inline_keyboard": [
             [{"text": "Recap", "url": "https://example.com/1"}],
-            [{"text": "Prep", "url": "https://example.com/2"}],
+            [{"text": "Prep", "web_app": {"url": "https://example.com/2"}}],
         ]
     }
 

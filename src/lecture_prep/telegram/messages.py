@@ -1,51 +1,14 @@
-"""Turn summaries into Telegram messages.
+"""The Telegram messages the app sends: short, with buttons that open the Mini App.
 
-Claude writes markdown; Telegram understands only a small HTML subset, so headings and bold become <b>,
-inline code becomes <code>, list dashes become bullets, and everything else is escaped.
+The summaries themselves are read in the Mini App, not in the chat, so a lecture day costs one morning
+message and one reminder per lecture instead of a stream of long texts.
 """
 
 import html
-import re
 from zoneinfo import ZoneInfo
 
 from lecture_prep.daily import LectureBrief
-from lecture_prep.telegram.client import MAX_MESSAGE_LENGTH
-
-HEADING = re.compile(r"^#{1,6}\s+(.+)$")
-BULLET = re.compile(r"^(\s*)[-*]\s+")
-BOLD = re.compile(r"\*\*(.+?)\*\*")
-CODE = re.compile(r"`([^`]+)`")
-
-
-def markdown_to_html(markdown: str) -> str:
-    lines = []
-    for line in markdown.strip().splitlines():
-        line = html.escape(line, quote=False)
-        if heading := HEADING.match(line):
-            line = f"<b>{heading.group(1)}</b>"
-        line = BULLET.sub(r"\1• ", line)
-        line = BOLD.sub(r"<b>\1</b>", line)
-        line = CODE.sub(r"<code>\1</code>", line)
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def split_message(text: str, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:
-    """Split at line breaks so each part fits Telegram's limit. Tags never span lines, so they stay whole."""
-    parts: list[str] = []
-    current = ""
-    for line in text.split("\n"):
-        while len(line) > limit:  # a single huge line: cut it hard
-            parts.append(line[:limit])
-            line = line[limit:]
-        candidate = f"{current}\n{line}" if current else line
-        if len(candidate) > limit:
-            parts.append(current)
-            candidate = line
-        current = candidate
-    if current.strip():
-        parts.append(current)
-    return parts
+from lecture_prep.telegram.client import Button
 
 
 def lecture_heading(brief: LectureBrief, tz: ZoneInfo) -> str:
@@ -53,22 +16,25 @@ def lecture_heading(brief: LectureBrief, tz: ZoneInfo) -> str:
     return f"{start:%H:%M}  {html.escape(brief.course.name)} - הרצאה {brief.number}"
 
 
-def morning_messages(briefs: list[LectureBrief], tz: ZoneInfo) -> list[str]:
-    """An overview of the day, then the recap and the prep brief of every lecture."""
-    overview = "<b>📚 ההרצאות של היום</b>\n" + "\n".join(f"• {lecture_heading(b, tz)}" for b in briefs)
-    messages = [overview]
-    for brief in briefs:
-        name = html.escape(brief.course.name)
-        if brief.recap is not None:
-            title = f"<b>🔁 חזרה: {name}, הרצאה {brief.number - 1}</b>"
-            messages += split_message(f"{title}\n\n{markdown_to_html(brief.recap.content)}")
-        if brief.prep is not None:
-            title = f"<b>💡 הכנה: {name}, הרצאה {brief.number}</b>"
-            messages += split_message(f"{title}\n\n{markdown_to_html(brief.prep.content)}")
-        else:
-            messages.append(f"<b>💡 הכנה: {name}, הרצאה {brief.number}</b>\n\nאין עדיין קבצים להרצאה הזאת.")
-    return messages
+def lecture_url(app_url: str, brief: LectureBrief) -> str:
+    return f"{app_url.rstrip('/')}/app?course={brief.course.id}&lecture={brief.number}"
 
 
-def reminder_message(brief: LectureBrief, tz: ZoneInfo) -> str:
-    return f"⏰ <b>עוד מעט:</b> {lecture_heading(brief, tz)}"
+def lecture_button(app_url: str, brief: LectureBrief) -> Button:
+    return Button(f"{brief.course.name} - הרצאה {brief.number}", lecture_url(app_url, brief), web_app=True)
+
+
+def morning_message(
+    briefs: list[LectureBrief], tz: ZoneInfo, app_url: str | None
+) -> tuple[str, list[Button]]:
+    """The day's lectures, with a button per lecture that opens its prep, recap and chat."""
+    lines = ["<b>📚 ההרצאות של היום</b>", *(f"• {lecture_heading(brief, tz)}" for brief in briefs)]
+    if app_url is None:
+        return "\n".join(lines), []
+    lines += ["", "לחיצה על הרצאה פותחת את ההכנה, החזרה והשאלות."]
+    return "\n".join(lines), [lecture_button(app_url, brief) for brief in briefs]
+
+
+def reminder_message(brief: LectureBrief, tz: ZoneInfo, app_url: str | None) -> tuple[str, list[Button]]:
+    text = f"⏰ <b>עוד מעט:</b> {lecture_heading(brief, tz)}"
+    return text, [lecture_button(app_url, brief)] if app_url else []

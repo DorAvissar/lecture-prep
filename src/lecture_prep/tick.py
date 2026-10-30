@@ -25,7 +25,7 @@ from lecture_prep.google_api.calendar import CalendarClient
 from lecture_prep.google_api.drive import DriveClient
 from lecture_prep.summarizer import Summarizer, claude_client
 from lecture_prep.telegram.client import Button, TelegramClient
-from lecture_prep.telegram.messages import morning_messages, reminder_message
+from lecture_prep.telegram.messages import morning_message, reminder_message
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ class Schedule:
     tz: ZoneInfo
     morning_hour: int
     reminder_minutes: int
+    app_url: str | None = None  # where the Mini App is served; None: messages go without buttons
 
 
 def tick(
@@ -63,8 +64,8 @@ def tick(
     sent: list[str] = []
 
     if briefs and not was_sent(session, MORNING, day):
-        for message in morning_messages(briefs, schedule.tz):
-            messenger.send_message(chat_id, message)
+        text, buttons = morning_message(briefs, schedule.tz, schedule.app_url)
+        messenger.send_message(chat_id, text, buttons)
         mark_sent(session, MORNING, day)
         sent.append(MORNING)
 
@@ -72,7 +73,8 @@ def tick(
     for brief in briefs:
         due = brief.event.start - lead <= now < brief.event.start
         if due and not was_sent(session, REMINDER, day, brief.event.id):
-            messenger.send_message(chat_id, reminder_message(brief, schedule.tz))
+            text, buttons = reminder_message(brief, schedule.tz, schedule.app_url)
+            messenger.send_message(chat_id, text, buttons)
             mark_sent(session, REMINDER, day, brief.event.id)
             sent.append(f"{REMINDER} {brief.course.name}")
     return sent
@@ -96,7 +98,9 @@ def main() -> None:
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
         raise SystemExit("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID first (see the README).")
     api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    schedule = Schedule(ZoneInfo(settings.timezone), settings.morning_hour, settings.reminder_minutes)
+    schedule = Schedule(
+        ZoneInfo(settings.timezone), settings.morning_hour, settings.reminder_minutes, settings.public_url
+    )
 
     with (
         CalendarClient.from_settings(settings) as calendar,

@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     telegram_chat_id: int | None = None
     morning_hour: int = 7  # local hour of the morning message
     reminder_minutes: int = 30  # how long before a lecture its reminder is sent
+    # The app's public https address, e.g. https://lecture-prep.up.railway.app. Telegram buttons open the
+    # Mini App there; until it is set, messages go without buttons.
+    public_url: str | None = None
 
 
 @lru_cache

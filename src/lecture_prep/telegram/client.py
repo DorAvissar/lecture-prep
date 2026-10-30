@@ -18,6 +18,7 @@ class TelegramError(RuntimeError):
 class Button:
     text: str
     url: str
+    web_app: bool = False  # open the URL as a Mini App inside Telegram (must be https)
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,7 @@ class TelegramClient:
         }
         if buttons:
             # One button per row; "url" buttons open the link in Telegram's browser.
-            payload["reply_markup"] = {"inline_keyboard": [[{"text": b.text, "url": b.url}] for b in buttons]}
+            payload["reply_markup"] = {"inline_keyboard": [[_button(b)] for b in buttons]}
         self._call("sendMessage", payload)
 
     def recent_chats(self) -> list[Chat]:
@@ -76,3 +77,9 @@ class TelegramClient:
         self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
     ) -> None:
         self.close()
+
+
+def _button(button: Button) -> dict[str, Any]:
+    if button.web_app:
+        return {"text": button.text, "web_app": {"url": button.url}}
+    return {"text": button.text, "url": button.url}

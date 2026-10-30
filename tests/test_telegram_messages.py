@@ -2,65 +2,51 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from lecture_prep.daily import LectureBrief
-from lecture_prep.db.models import Course, Summary, SummaryKind
+from lecture_prep.db.models import Course
 from lecture_prep.google_api.calendar import CalendarEvent
-from lecture_prep.telegram.messages import markdown_to_html, morning_messages, reminder_message, split_message
+from lecture_prep.telegram.client import Button
+from lecture_prep.telegram.messages import morning_message, reminder_message
 
 TZ = ZoneInfo("Asia/Jerusalem")
+APP = "https://lecture-prep.example.com/"
 
 
-def brief(
-    name: str = "חדוא 2", number: int = 5, recap: str | None = "r", prep: str | None = "p"
-) -> LectureBrief:
+def brief(name: str = "חדוא 2", course_id: int = 3, number: int = 5) -> LectureBrief:
     start = datetime(2026, 11, 2, 10, 15, tzinfo=TZ)
     return LectureBrief(
-        course=Course(name=name, drive_folder="x"),
+        course=Course(id=course_id, name=name, drive_folder="x"),
         event=CalendarEvent(id="e1", title=name, start=start, end=start + timedelta(hours=2)),
         number=number,
-        recap=Summary(kind=SummaryKind.RECAP, content=recap, model="m") if recap else None,
-        prep=Summary(kind=SummaryKind.PREP, content=prep, model="m") if prep else None,
+        recap=None,
+        prep=None,
     )
 
 
-def test_markdown_becomes_telegram_html():
-    markdown = "## נגזרות\n\n- **שיפוע** של `f(x)`\n* a < b & c"
+def test_morning_message_lists_lectures_with_a_button_each():
+    text, buttons = morning_message([brief(), brief("Systems", 4, 7)], TZ, APP)
 
-    assert markdown_to_html(markdown) == (
-        "<b>נגזרות</b>\n\n• <b>שיפוע</b> של <code>f(x)</code>\n• a &lt; b &amp; c"
-    )
-
-
-def test_split_message_keeps_short_text_whole():
-    assert split_message("one\ntwo", limit=100) == ["one\ntwo"]
+    assert "10:15  חדוא 2 - הרצאה 5" in text
+    assert buttons == [
+        Button("חדוא 2 - הרצאה 5", "https://lecture-prep.example.com/app?course=3&lecture=5", web_app=True),
+        Button("Systems - הרצאה 7", "https://lecture-prep.example.com/app?course=4&lecture=7", web_app=True),
+    ]
 
 
-def test_split_message_breaks_at_lines():
-    assert split_message("aaaa\nbbbb\ncccc", limit=9) == ["aaaa\nbbbb", "cccc"]
+def test_without_an_app_url_there_are_no_buttons():
+    text, buttons = morning_message([brief()], TZ, None)
 
-
-def test_split_message_cuts_a_line_longer_than_the_limit():
-    assert split_message("x" * 12, limit=5) == ["xxxxx", "xxxxx", "xx"]
-
-
-def test_morning_messages_start_with_an_overview_then_recap_and_prep():
-    overview, recap, prep = morning_messages([brief()], TZ)
-
-    assert "10:15  חדוא 2 - הרצאה 5" in overview
-    assert recap.startswith("<b>🔁 חזרה: חדוא 2, הרצאה 4</b>")
-    assert prep.startswith("<b>💡 הכנה: חדוא 2, הרצאה 5</b>")
-
-
-def test_morning_messages_say_when_prep_material_is_missing():
-    overview, prep = morning_messages([brief(recap=None, prep=None)], TZ)
-
-    assert "אין עדיין קבצים" in prep
+    assert "חדוא 2" in text
+    assert buttons == []
 
 
 def test_course_names_are_escaped():
-    [overview, *_] = morning_messages([brief(name="C<D>")], TZ)
+    text, _ = morning_message([brief(name="C<D>")], TZ, APP)
 
-    assert "C&lt;D&gt;" in overview
+    assert "C&lt;D&gt;" in text
 
 
-def test_reminder_names_the_lecture():
-    assert "חדוא 2 - הרצאה 5" in reminder_message(brief(), TZ)
+def test_reminder_names_the_lecture_and_opens_it():
+    text, [button] = reminder_message(brief(), TZ, APP)
+
+    assert "חדוא 2 - הרצאה 5" in text
+    assert button.web_app
