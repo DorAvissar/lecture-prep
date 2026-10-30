@@ -14,8 +14,8 @@ def make_course(**overrides) -> Course:
 def test_course_lectures_are_ordered_by_number(db_session: Session):
     course = make_course()
     course.lectures = [
-        Lecture(number=2, source_path="/Uni/Linear Algebra/lecture2.pdf"),
-        Lecture(number=1, source_path="/Uni/Linear Algebra/lecture1.pdf"),
+        Lecture(number=2),
+        Lecture(number=1),
     ]
     db_session.add(course)
     db_session.commit()
@@ -30,8 +30,8 @@ def test_course_lectures_are_ordered_by_number(db_session: Session):
 def test_lecture_number_is_unique_within_a_course(db_session: Session):
     course = make_course()
     course.lectures = [
-        Lecture(number=1, source_path="/a.pdf"),
-        Lecture(number=1, source_path="/b.pdf"),
+        Lecture(number=1),
+        Lecture(number=1),
     ]
     db_session.add(course)
 
@@ -40,7 +40,7 @@ def test_lecture_number_is_unique_within_a_course(db_session: Session):
 
 
 def test_deleting_a_course_deletes_its_lectures_and_summaries(db_session: Session):
-    lecture = Lecture(number=1, source_path="/a.pdf")
+    lecture = Lecture(number=1)
     lecture.summaries = [Summary(kind=SummaryKind.PREP, content="...", model="test-model")]
     course = make_course(lectures=[lecture])
     db_session.add(course)
@@ -54,7 +54,7 @@ def test_deleting_a_course_deletes_its_lectures_and_summaries(db_session: Sessio
 
 
 def test_summary_kind_is_stored_as_lowercase_value(db_session: Session):
-    lecture = Lecture(number=1, source_path="/a.pdf")
+    lecture = Lecture(number=1)
     lecture.summaries = [Summary(kind=SummaryKind.RECAP, content="...", model="test-model")]
     db_session.add(make_course(lectures=[lecture]))
     db_session.commit()
