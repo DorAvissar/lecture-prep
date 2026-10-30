@@ -25,3 +25,12 @@ def test_cloud_variables_carry_settings_and_secrets():
     assert variables["GEMINI_API_KEY"] == "g-key"
     assert variables["TELEGRAM_CHAT_ID"] == "42"
     assert all("\n" not in value for value in variables.values())
+
+
+def test_database_url_survives_copy_paste_noise():
+    from lecture_prep.cloud_env import clean_database_url
+
+    assert clean_database_url(" <user:pw@ep-x.neon.tech/db?sslmode=require> ") == (
+        "postgresql://user:pw@ep-x.neon.tech/db?sslmode=require"
+    )
+    assert clean_database_url("'postgresql://user:pw@h/db'") == "postgresql://user:pw@h/db"

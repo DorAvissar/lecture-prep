@@ -22,3 +22,11 @@ def test_explicit_driver_is_kept():
     url = "postgresql+psycopg://u:p@localhost:5432/x"
 
     assert Settings(_env_file=None, database_url=url).database_url == url
+
+
+def test_production_refuses_the_local_database():
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="DATABASE_URL is not set"):
+        Settings(_env_file=None, environment="production")

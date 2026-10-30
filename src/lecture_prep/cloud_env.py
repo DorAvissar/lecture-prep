@@ -7,6 +7,7 @@ scheduler must send the same value. The file holds secrets - paste it, then dele
 """
 
 import json
+import re
 import secrets
 import sys
 from pathlib import Path
@@ -44,9 +45,21 @@ def cloud_variables(
     }
 
 
+def clean_database_url(raw: str) -> str:
+    """Forgive copy-paste noise (spaces, quotes, <angle brackets>) and a missing postgresql:// prefix."""
+    url = raw.strip().strip("<>\"'").strip()
+    if url and not re.match(r"postgres(ql)?(\+\w+)?://", url):
+        url = "postgresql://" + url
+    if url and "@" not in url:
+        raise SystemExit(
+            "That does not look like a database URL: expected postgresql://user:password@host/db"
+        )
+    return url
+
+
 def main() -> None:
     settings = get_settings()
-    database_url = sys.argv[1] if len(sys.argv) > 1 else ""
+    database_url = clean_database_url(sys.argv[1] if len(sys.argv) > 1 else "")
     google_token = settings.google_token_path.read_text(encoding="utf-8")
     variables = cloud_variables(settings, google_token, database_url, secrets.token_urlsafe(32))
     OUTPUT.write_text("".join(f"{name}={value}\n" for name, value in variables.items()), encoding="utf-8")
