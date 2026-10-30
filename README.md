@@ -244,6 +244,21 @@ DATABASE_URL="<Neon connection string>" uv run python -m lecture_prep.courses
 DATABASE_URL="<Neon connection string>" uv run python -m lecture_prep.courses next "<course>" <number>
 ```
 
+### Sharing with classmates
+
+Classmates who take the same courses can get the same messages and use the Mini App. Set `INVITE_CODE`
+(any random string, in `.env` and on the host), then send them the invite link:
+
+```bash
+uv run python -m lecture_prep.members invite        # https://t.me/<your bot>?start=<code>
+uv run python -m lecture_prep.members list
+uv run python -m lecture_prep.members remove <chat id>
+```
+
+Opening the link sends the bot `/start <code>`; the next tick adds them and sends a welcome message.
+Anyone without the code is told the bot is private. Members can ask `MEMBER_DAILY_QUESTIONS` (default 20)
+chat questions a day; the owner has no limit. Change `INVITE_CODE` to stop new people from joining.
+
 ### Changing the database schema
 
 ```bash
