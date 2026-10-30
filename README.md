@@ -139,6 +139,27 @@ uv run python -m lecture_prep.run_day 2026-11-02    # another day
 For each lecture on the calendar it writes a recap of the previous lecture and a prep brief for today's,
 stores them, and prints them. Stored summaries are reused, so a second run costs nothing.
 
+### Connecting Telegram
+
+1. In Telegram, open **@BotFather**, send `/newbot`, and put the token it gives you in `.env` as
+   `TELEGRAM_BOT_TOKEN`.
+2. Send your new bot any message, then print your chat id and put it in `.env` as `TELEGRAM_CHAT_ID`:
+
+```bash
+uv run python -m lecture_prep.telegram.chat_id
+```
+
+### Sending on schedule
+
+```bash
+uv run python -m lecture_prep.tick
+```
+
+Run it every 15 minutes (a cron job in the cloud). From `MORNING_HOUR` (default 07:00) it sends the
+day's overview with every recap and prep brief, once; `REMINDER_MINUTES` (default 30) before each lecture
+it sends a short reminder, once. Sent messages are recorded in the database, so extra runs are harmless
+and a failed run is retried by the next one.
+
 ### Changing the database schema
 
 ```bash
@@ -153,7 +174,8 @@ uv run alembic upgrade head
 ```
 src/lecture_prep/             application code: lecture locator, summarizer, daily pipeline
 src/lecture_prep/db/          database models and session
-src/lecture_prep/google_api/  Google sign-in, Drive client (and Calendar sync)
+src/lecture_prep/google_api/  Google sign-in, Drive and Calendar clients
+src/lecture_prep/telegram/    Telegram client and message formatting
 migrations/                   Alembic database migrations
 tests/                        pytest test suite
 .github/workflows/            CI pipeline
@@ -169,6 +191,6 @@ tests/                        pytest test suite
 - [x] Summarizer: recap and prep prompts, lecture PDFs sent to Claude directly
 - [x] Daily pipeline: calendar -> files -> stored summaries
 - [ ] Summary quality evals
-- [ ] Scheduler + Telegram bot
+- [x] Scheduler + Telegram bot: morning message and lecture reminders
 - [ ] Telegram Mini App with lecture-aware chat
 - [ ] Cloud deployment
