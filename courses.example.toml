@@ -1,0 +1,15 @@
+# Copy to courses.toml (git-ignored), then run: uv run python -m lecture_prep.courses
+#
+# name:         the course name; matched against calendar event titles (case-insensitive)
+# aliases:      other spellings that appear in calendar titles
+# drive_folder: the course folder in Google Drive, whose files start with the lecture number
+
+[[course]]
+name = "חדו\"א 2"
+aliases = ["חדוא 2", "Calculus 2"]
+drive_folder = "Lectures/Calculus 2"
+
+[[course]]
+name = "תכנון אלגוריתמים"
+aliases = ["Algorithms"]
+drive_folder = "Lectures/Algorithms"
