@@ -2,8 +2,12 @@
 
 Sign in once with `uv run python -m lecture_prep.google_api.login`. The saved refresh token lets the app
 get fresh access tokens (they expire after an hour) without a browser.
+
+In the cloud there is no token file: the same JSON goes in the GOOGLE_TOKEN_JSON variable, and fresh
+access tokens are kept in memory only (the refresh token itself never changes).
 """
 
+import json
 from collections.abc import Callable, Generator
 from pathlib import Path
 
@@ -55,21 +59,41 @@ def load_credentials(token_path: Path) -> Credentials:
     return credentials
 
 
+def credentials_from_json(token_json: str) -> Credentials:
+    """Valid credentials from the token file's JSON content, refreshed in memory."""
+    try:
+        credentials = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+    except (ValueError, KeyError) as error:
+        raise GoogleAuthError(f"GOOGLE_TOKEN_JSON is not a valid token ({error}).") from error
+    try:
+        credentials.refresh(Request())
+    except RefreshError as error:
+        raise GoogleAuthError(f"Google sign-in expired or was revoked ({error}). {LOGIN_HINT}") from error
+    return credentials
+
+
 def save_credentials(credentials: Credentials, token_path: Path) -> None:
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(credentials.to_json(), encoding="utf-8")
 
 
 class TokenSource:
-    """Callable that returns a current access token, reloading/refreshing only when needed."""
+    """Callable that returns a current access token, reloading/refreshing only when needed.
 
-    def __init__(self, token_path: Path) -> None:
+    Reads the token file, or - when `token_json` is given (the cloud) - that JSON instead.
+    """
+
+    def __init__(self, token_path: Path, token_json: str | None = None) -> None:
         self._token_path = token_path
+        self._token_json = token_json
         self._credentials: Credentials | None = None
 
     def __call__(self) -> str:
         if self._credentials is None or not self._credentials.valid:
-            self._credentials = load_credentials(self._token_path)
+            if self._token_json is not None:
+                self._credentials = credentials_from_json(self._token_json)
+            else:
+                self._credentials = load_credentials(self._token_path)
         return self._credentials.token
 
 

@@ -34,7 +34,9 @@ class CalendarClient:
     @classmethod
     def from_settings(cls, settings: Settings) -> Self:
         http = httpx.Client(
-            base_url=CALENDAR_URL, auth=BearerAuth(TokenSource(settings.google_token_path)), timeout=30
+            base_url=CALENDAR_URL,
+            auth=BearerAuth(TokenSource(settings.google_token_path, settings.google_token_json_value)),
+            timeout=30,
         )
         return cls(http, tuple(settings.calendar_ids))
 

@@ -53,7 +53,7 @@ class DriveClient:
     def from_settings(cls, settings: Settings) -> Self:
         http = httpx.Client(
             base_url=DRIVE_URL,
-            auth=BearerAuth(TokenSource(settings.google_token_path)),
+            auth=BearerAuth(TokenSource(settings.google_token_path, settings.google_token_json_value)),
             follow_redirects=True,
             timeout=30,
         )
