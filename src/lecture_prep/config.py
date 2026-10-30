@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None  # None: the SDK falls back to its own credential lookup
     anthropic_model: str = "claude-opus-5-5"
     gemini_api_key: SecretStr | None = None  # from https://aistudio.google.com
-    gemini_model: str = "gemini-2.5-pro"
+    gemini_model: str = "gemini-pro-latest"
 
     # Telegram. The token comes from @BotFather; find the chat id with
     # `uv run python -m lecture_prep.telegram.chat_id` after sending your bot any message.

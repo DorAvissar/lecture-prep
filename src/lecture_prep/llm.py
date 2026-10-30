@@ -192,15 +192,14 @@ def gemini_contents(files: Sequence[LectureFile], turns: Sequence[ChatMessage]) 
     return contents
 
 
-def make_model(settings: Settings, provider: str | None = None) -> Model:
-    """The model chosen in settings (or `provider`, to compare)."""
+def make_model(settings: Settings, provider: str | None = None, model: str | None = None) -> Model:
+    """The model chosen in settings, or another `provider` / `model` (to compare)."""
     provider = provider or settings.llm_provider
     if provider == "gemini":
         if settings.gemini_api_key is None:
             raise ModelError("set GEMINI_API_KEY in .env to use Gemini")
-        return GeminiModel(
-            genai.Client(api_key=settings.gemini_api_key.get_secret_value()), settings.gemini_model
-        )
+        client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
+        return GeminiModel(client, model or settings.gemini_model)
     api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
-    return ClaudeModel(client, settings.anthropic_model)
+    claude_client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+    return ClaudeModel(claude_client, model or settings.anthropic_model)

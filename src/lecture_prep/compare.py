@@ -1,11 +1,11 @@
-"""Compare Claude and Gemini on one real lecture, blind:
+"""Compare models on one real lecture, blind:
 
     uv run python -m lecture_prep.compare "תכנות מערכות" 5
 
-Writes the prep brief for lecture 5 and the recap of lecture 4 with both providers, then saves a page
-(comparisons/, git-ignored) that shows the two versions as A and B in random order. Which model wrote
-which is revealed only at the bottom, so the choice is made on the text alone. Summaries Claude already
-wrote are reused from the database; nothing new is stored.
+Writes the prep brief for lecture 5 and the recap of lecture 4 with every model in CANDIDATES, then saves
+a page (comparisons/, git-ignored) that shows the versions as A, B, C in random order. Which model wrote
+which is revealed only at the bottom, so the choice is made on the text alone. Summaries the configured
+Claude model already wrote are reused from the database; nothing new is stored.
 """
 
 import html
@@ -26,6 +26,12 @@ from lecture_prep.summarizer import Summarizer
 from lecture_prep.web.render import render_markdown
 
 OUTPUT_DIR = Path("comparisons")
+# (name shown when revealed, provider, model id or None for the one in settings)
+CANDIDATES = [
+    ("Claude Opus 5.5", "claude", None),
+    ("Claude Sonnet 5.5", "claude", "claude-sonnet-5-5"),
+    ("Gemini Pro", "gemini", None),
+]
 PAGE_STYLE = (Path(__file__).parent / "web" / "static" / "app.html").read_text(encoding="utf-8")
 PAGE_STYLE = PAGE_STYLE[PAGE_STYLE.index("<style>") : PAGE_STYLE.index("</style>") + len("</style>")]
 
@@ -53,12 +59,12 @@ def main() -> None:
                 .where(Lecture.course_id == course.id, Lecture.number == lecture_number, Summary.kind == kind)
             )
             versions[kind] = {}
-            for provider in ("claude", "gemini"):
-                if provider == "claude" and stored is not None:
-                    versions[kind][provider] = stored.content
+            for name, provider, model in CANDIDATES:
+                if provider == "claude" and model is None and stored is not None:
+                    versions[kind][name] = stored.content  # already written by the configured model
                     continue
-                result = Summarizer(make_model(settings, provider)).summarize(kind, course.name, files)
-                versions[kind][provider] = result.content
+                result = Summarizer(make_model(settings, provider, model)).summarize(kind, course.name, files)
+                versions[kind][name] = result.content
 
     path = OUTPUT_DIR / f"{course_name}-{number}.html"
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -67,9 +73,9 @@ def main() -> None:
 
 
 def blind_page(course_name: str, number: int, versions: dict[SummaryKind, dict[str, str]]) -> str:
-    order = ["claude", "gemini"]
-    random.shuffle(order)  # A and B are random, so the reader cannot guess
-    labels = {"A": order[0], "B": order[1]}
+    names = list(next(iter(versions.values())))
+    random.shuffle(names)  # the letters are random, so the reader cannot guess
+    labels = dict(zip("ABCDEFG", names, strict=False))
     titles = {SummaryKind.PREP: f"הכנה להרצאה {number}", SummaryKind.RECAP: f"חזרה על הרצאה {number - 1}"}
 
     sections = []
@@ -80,7 +86,7 @@ def blind_page(course_name: str, number: int, versions: dict[SummaryKind, dict[s
                 f'<div class="version"><h4>גרסה {label}</h4>{render_markdown(by_provider[provider])}</div>'
             )
 
-    reveal = " · ".join(f"גרסה {label}: {provider.capitalize()}" for label, provider in labels.items())
+    reveal = "<br>".join(f"גרסה {label}: <bdi>{name}</bdi>" for label, name in labels.items())
     return f"""<!doctype html>
 <html lang="he" dir="rtl">
 <head>
