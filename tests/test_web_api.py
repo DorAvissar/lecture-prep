@@ -140,3 +140,13 @@ def test_development_never_opens_the_api_to_other_computers(db_session, course, 
     remote = TestClient(app_client.app, client=("203.0.113.7", 50000))
 
     assert remote.get(f"/api/lectures/{course.id}/5").status_code == 401
+
+
+def test_public_home_and_privacy_pages_for_google(db_session, chat):
+    client = make_client(db_session, chat)
+
+    home, privacy = client.get("/"), client.get("/privacy")
+
+    assert home.status_code == privacy.status_code == 200
+    assert 'href="/privacy"' in home.text
+    assert "read-only" in privacy.text and "Limited Use" in privacy.text
