@@ -60,8 +60,13 @@ def main() -> None:
             )
             versions[kind] = {}
             for name, provider, model in CANDIDATES:
-                if provider == "claude" and model is None and stored is not None:
-                    versions[kind][name] = stored.content  # already written by the configured model
+                if (
+                    provider == "claude"
+                    and model is None
+                    and stored
+                    and stored.model == settings.anthropic_model
+                ):
+                    versions[kind][name] = stored.content  # this model already wrote it
                     continue
                 result = Summarizer(make_model(settings, provider, model)).summarize(kind, course.name, files)
                 versions[kind][name] = result.content

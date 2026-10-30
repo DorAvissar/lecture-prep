@@ -1,7 +1,8 @@
 """One small interface for the language model, so Claude and Gemini are interchangeable.
 
 The summarizer and the lecture chat decide *what* to ask (system prompt, lecture PDFs, conversation);
-a Model decides *how* to ask its provider. LLM_PROVIDER in .env picks the provider.
+a Model decides *how* to ask its provider. LLM_PROVIDER in .env picks the provider, and LLM_FALLBACK_*
+a backup model that answers whenever the main one fails (a usage limit, an outage, a refusal).
 """
 
 import base64
@@ -11,8 +12,10 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 import anthropic
+import httpx
 from anthropic.types.beta import BetaContentBlockParam, BetaMessageParam
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 
 from lecture_prep.config import Settings
@@ -73,17 +76,20 @@ class ClaudeModel:
         effort: Effort,
         max_tokens: int,
     ) -> Reply:
-        # Long PDFs make for slow requests; streaming keeps the connection from timing out.
-        with self._client.beta.messages.stream(
-            model=self._model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=claude_messages(files, turns),
-            output_config={"effort": effort},
-            betas=[CLAUDE_FALLBACK_BETA],
-            fallbacks="default",
-        ) as stream:
-            message = stream.get_final_message()
+        try:
+            # Long PDFs make for slow requests; streaming keeps the connection from timing out.
+            with self._client.beta.messages.stream(
+                model=self._model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=claude_messages(files, turns),
+                output_config={"effort": effort},
+                betas=[CLAUDE_FALLBACK_BETA],
+                fallbacks="default",
+            ) as stream:
+                message = stream.get_final_message()
+        except anthropic.APIError as error:  # rate limits, outages, network errors (after SDK retries)
+            raise ModelError(f"{self._model}: {error}") from error
 
         usage = message.usage
         log.info(
@@ -146,15 +152,18 @@ class GeminiModel:
         effort: Effort,
         max_tokens: int,
     ) -> Reply:
-        response = self._client.models.generate_content(
-            model=self._model,
-            contents=gemini_contents(files, turns),
-            config=genai_types.GenerateContentConfig(
-                system_instruction=system,
-                max_output_tokens=max_tokens,
-                thinking_config=genai_types.ThinkingConfig(thinking_level=GEMINI_THINKING[effort]),
-            ),
-        )
+        try:
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=gemini_contents(files, turns),
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=system,
+                    max_output_tokens=max_tokens,
+                    thinking_config=genai_types.ThinkingConfig(thinking_level=GEMINI_THINKING[effort]),
+                ),
+            )
+        except (genai_errors.APIError, httpx.HTTPError) as error:  # usage limits, outages, network errors
+            raise ModelError(f"{self._model}: {error}") from error
         usage = response.usage_metadata
         if usage is not None:
             log.info(
@@ -193,9 +202,40 @@ def gemini_contents(files: Sequence[LectureFile], turns: Sequence[ChatMessage]) 
     return contents
 
 
+class FallbackModel:
+    """Ask `primary`; if it fails, ask `backup` instead. Reply.model tells which one answered."""
+
+    def __init__(self, primary: Model, backup: Model) -> None:
+        self._primary = primary
+        self._backup = backup
+
+    def generate(
+        self,
+        system: str,
+        files: Sequence[LectureFile],
+        turns: Sequence[ChatMessage],
+        effort: Effort,
+        max_tokens: int,
+    ) -> Reply:
+        try:
+            return self._primary.generate(system, files, turns, effort, max_tokens)
+        except ModelError as error:
+            log.warning("Main model failed, using the backup: %s", error)
+            return self._backup.generate(system, files, turns, effort, max_tokens)
+
+
 def make_model(settings: Settings, provider: str | None = None, model: str | None = None) -> Model:
-    """The model chosen in settings, or another `provider` / `model` (to compare)."""
-    provider = provider or settings.llm_provider
+    """The model in settings with its backup; or exactly `provider` / `model` (to compare models)."""
+    if provider is not None:
+        return _single_model(settings, provider, model)
+    primary = _single_model(settings, settings.llm_provider, None)
+    if settings.llm_fallback_provider is None:
+        return primary
+    backup = _single_model(settings, settings.llm_fallback_provider, settings.llm_fallback_model)
+    return FallbackModel(primary, backup)
+
+
+def _single_model(settings: Settings, provider: str, model: str | None) -> Model:
     if provider == "gemini":
         if settings.gemini_api_key is None:
             raise ModelError("set GEMINI_API_KEY in .env to use Gemini")

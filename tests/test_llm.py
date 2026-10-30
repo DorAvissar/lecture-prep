@@ -5,8 +5,17 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
+from google.genai import errors as genai_errors
 
-from lecture_prep.llm import ChatMessage, ClaudeModel, GeminiModel, LectureFile, ModelError
+from lecture_prep.llm import (
+    ChatMessage,
+    ClaudeModel,
+    FallbackModel,
+    GeminiModel,
+    LectureFile,
+    ModelError,
+    Reply,
+)
 
 FILES = [LectureFile("4.pdf", b"%PDF-4"), LectureFile("5.pdf", b"%PDF-5")]
 TURNS = [ChatMessage("user", "שאלה 1"), ChatMessage("assistant", "תשובה 1"), ChatMessage("user", "שאלה 2")]
@@ -132,3 +141,47 @@ def test_gemini_unfinished_answers_raise(finish_reason):
 def test_gemini_empty_answer_raises():
     with pytest.raises(ModelError):
         gemini(FakeGenai(text=None))
+
+
+# --- Backup model -----------------------------------------------------------------------------------
+
+
+class StubModel:
+    def __init__(self, name: str, fails: bool = False) -> None:
+        self.name, self.fails, self.calls = name, fails, 0
+
+    def generate(self, system, files, turns, effort, max_tokens):
+        self.calls += 1
+        if self.fails:
+            raise ModelError(f"{self.name} is over its usage limit")
+        return Reply(text=f"from {self.name}", model=self.name)
+
+
+def test_backup_is_not_used_while_the_main_model_works():
+    main, backup = StubModel("gemini"), StubModel("sonnet")
+
+    reply = FallbackModel(main, backup).generate("sys", FILES, TURNS, "high", 1000)
+
+    assert reply.model == "gemini"
+    assert backup.calls == 0
+
+
+def test_backup_answers_when_the_main_model_fails(caplog):
+    main, backup = StubModel("gemini", fails=True), StubModel("sonnet")
+
+    reply = FallbackModel(main, backup).generate("sys", FILES, TURNS, "high", 1000)
+
+    assert (reply.text, reply.model) == ("from sonnet", "sonnet")
+    assert "usage limit" in caplog.text
+
+
+def test_gemini_api_errors_become_model_errors():
+    client = FakeGenai()
+
+    def over_limit(**request):
+        raise genai_errors.ClientError(429, {"error": {"message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+
+    client.models.generate_content = over_limit
+
+    with pytest.raises(ModelError, match="quota"):
+        gemini(client)
