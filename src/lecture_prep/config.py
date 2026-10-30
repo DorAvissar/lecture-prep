@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None  # None: the SDK falls back to its own credential lookup
     anthropic_model: str = "claude-opus-5-5"
 
+    # Telegram. The token comes from @BotFather; find the chat id with
+    # `uv run python -m lecture_prep.telegram.chat_id` after sending your bot any message.
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: int | None = None
+    morning_hour: int = 7  # local hour of the morning message
+    reminder_minutes: int = 30  # how long before a lecture its reminder is sent
+
 
 @lru_cache
 def get_settings() -> Settings:
