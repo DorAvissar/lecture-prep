@@ -1,21 +1,13 @@
 """Answer questions about a lecture, with the lecture's own material as context.
 
 Each request sends the PDFs of today's lecture and the one before it, then the conversation so far. The
-PDFs come first and are marked for prompt caching, so follow-up questions re-read them at a fraction of
-the price. The conversation itself is not stored: the page keeps it and sends it back each time.
+PDFs come first, so providers that cache prompts (Claude) re-read them cheaply on follow-up questions.
+The conversation itself is not stored: the page keeps it and sends it back each time.
 """
 
-import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Literal
 
-import anthropic
-from anthropic.types.beta import BetaContentBlockParam, BetaMessageParam
-
-from lecture_prep.summarizer import FALLBACK_BETA, LectureFile, SummaryError, lecture_documents
-
-log = logging.getLogger(__name__)
+from lecture_prep.llm import ChatMessage, LectureFile, Model
 
 MAX_TOKENS = 16000
 
@@ -36,15 +28,8 @@ backticks, e.g. `pointer`, `O(n)`. Never start a line with an English word.
 - Use **bold** and `-` bullets sparingly. No tables."""
 
 
-@dataclass(frozen=True)
-class ChatMessage:
-    role: Literal["user", "assistant"]
-    content: str
-
-
 class LectureChat:
-    def __init__(self, client: anthropic.Anthropic, model: str) -> None:
-        self._client = client
+    def __init__(self, model: Model) -> None:
         self._model = model
 
     def answer(
@@ -58,52 +43,11 @@ class LectureChat:
         """Answer the last message in `history`, which must be the student's question."""
         if not history or history[-1].role != "user":
             raise ValueError("the conversation must end with a question")
-        with self._client.beta.messages.stream(
-            model=self._model,
-            max_tokens=MAX_TOKENS,
-            system=CHAT_SYSTEM_PROMPT,
-            messages=build_messages(course_name, number, current, previous, history),
-            output_config={"effort": "medium"},
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-        ) as stream:
-            message = stream.get_final_message()
-
-        usage = message.usage
-        log.info(
-            "chat for %s %d: %d input (%d from cache), %d output tokens",
-            course_name,
-            number,
-            usage.input_tokens,
-            usage.cache_read_input_tokens or 0,
-            usage.output_tokens,
+        intro = f"Course: {course_name}. Today's lecture is lecture {number}"
+        intro += f"; the files of lecture {number - 1} come first." if previous else "."
+        first = ChatMessage("user", f"{intro}\n\n{history[0].content}")
+        files = [*previous, *current]
+        reply = self._model.generate(
+            CHAT_SYSTEM_PROMPT, files, [first, *history[1:]], effort="medium", max_tokens=MAX_TOKENS
         )
-        if message.stop_reason == "refusal":
-            raise SummaryError("the model declined to answer")
-        text = "".join(block.text for block in message.content if block.type == "text").strip()
-        if not text:
-            raise SummaryError("the model returned an empty answer")
-        return text
-
-
-def build_messages(
-    course_name: str,
-    number: int,
-    current: Sequence[LectureFile],
-    previous: Sequence[LectureFile],
-    history: Sequence[ChatMessage],
-) -> list[BetaMessageParam]:
-    """The material and a short intro go before the first question; the rest of the chat follows."""
-    documents = lecture_documents([*previous, *current])
-    if documents:
-        documents[-1]["cache_control"] = {"type": "ephemeral"}  # everything up to here is cached
-    intro = f"Course: {course_name}. Today's lecture is lecture {number}"
-    intro += f"; the files of lecture {number - 1} come first." if previous else "."
-    first: list[BetaContentBlockParam] = [
-        *documents,
-        {"type": "text", "text": intro},
-        {"type": "text", "text": history[0].content},
-    ]
-    messages: list[BetaMessageParam] = [{"role": "user", "content": first}]
-    messages += [{"role": message.role, "content": message.content} for message in history[1:]]
-    return messages
+        return reply.text

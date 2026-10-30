@@ -19,7 +19,8 @@ from lecture_prep.db.models import Course, Lecture, Summary, SummaryKind
 from lecture_prep.google_api.calendar import CalendarClient, CalendarEvent
 from lecture_prep.google_api.drive import DriveItem
 from lecture_prep.lecture_locator import LectureMaterial, course_lectures
-from lecture_prep.summarizer import LectureFile, SummaryResult
+from lecture_prep.llm import LectureFile
+from lecture_prep.summarizer import SummaryResult
 
 log = logging.getLogger(__name__)
 

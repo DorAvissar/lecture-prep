@@ -1,84 +1,49 @@
-"""Summarizer tests. A fake Anthropic client records the request and returns a canned message."""
-
-import base64
-from contextlib import contextmanager
-from types import SimpleNamespace
+"""Summarizer tests. A fake model records what it was asked and returns a canned reply."""
 
 import pytest
 
 from lecture_prep.db.models import SummaryKind
-from lecture_prep.summarizer import INSTRUCTIONS, LectureFile, Summarizer, SummaryError
+from lecture_prep.llm import LectureFile, Reply
+from lecture_prep.summarizer import INSTRUCTIONS, SYSTEM_PROMPT, Summarizer
 
-MODEL = "claude-opus-5-5"
 FILES = [LectureFile("03 - Integrals.pdf", b"%PDF-slides"), LectureFile("03 notes.pdf", b"%PDF-notes")]
 
 
-def message(*texts: str, stop_reason: str = "end_turn", model: str = MODEL) -> SimpleNamespace:
-    blocks = [SimpleNamespace(type="thinking", thinking="")]
-    blocks += [SimpleNamespace(type="text", text=text) for text in texts]
-    usage = SimpleNamespace(input_tokens=5000, output_tokens=1500)
-    return SimpleNamespace(
-        content=blocks, stop_reason=stop_reason, stop_details=None, model=model, usage=usage
-    )
+class FakeModel:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def generate(self, system, files, turns, effort, max_tokens) -> Reply:
+        self.calls.append({"system": system, "files": files, "turns": turns, "effort": effort})
+        return Reply(text="סיכום", model="model-x")
 
 
-class FakeClient:
-    def __init__(self, reply: SimpleNamespace) -> None:
-        self.requests: list[dict] = []
+def test_sends_the_files_and_the_instructions_for_the_kind():
+    model = FakeModel()
 
-        @contextmanager
-        def stream(**request):
-            self.requests.append(request)
-            yield SimpleNamespace(get_final_message=lambda: reply)
+    result = Summarizer(model).summarize(SummaryKind.PREP, "Calculus 2", FILES)
 
-        self.beta = SimpleNamespace(messages=SimpleNamespace(stream=stream))
-
-
-def summarize(reply: SimpleNamespace, kind: SummaryKind = SummaryKind.PREP):
-    client = FakeClient(reply)
-    result = Summarizer(client, MODEL).summarize(kind, "Calculus 2", FILES)  # type: ignore[arg-type]
-    return result, client.requests
-
-
-def test_sends_every_pdf_then_the_instructions():
-    _, [request] = summarize(message("סיכום"))
-
-    [user] = request["messages"]
-    *documents, instructions = user["content"]
-    assert [doc["title"] for doc in documents] == ["03 - Integrals.pdf", "03 notes.pdf"]
-    assert base64.b64decode(documents[0]["source"]["data"]) == b"%PDF-slides"
-    assert documents[0]["source"]["media_type"] == "application/pdf"
-    assert "Calculus 2" in instructions["text"]
-    assert INSTRUCTIONS[SummaryKind.PREP] in instructions["text"]
-    assert request["model"] == MODEL
+    [call] = model.calls
+    assert call["system"] == SYSTEM_PROMPT
+    assert call["files"] == FILES
+    [turn] = call["turns"]
+    assert turn.role == "user"
+    assert "Calculus 2" in turn.content
+    assert INSTRUCTIONS[SummaryKind.PREP] in turn.content
+    assert call["effort"] == "high"
+    assert (result.content, result.model) == ("סיכום", "model-x")
 
 
 def test_recap_and_prep_use_different_instructions():
-    _, [recap] = summarize(message("x"), SummaryKind.RECAP)
+    model = FakeModel()
 
-    text = recap["messages"][0]["content"][-1]["text"]
+    Summarizer(model).summarize(SummaryKind.RECAP, "Calculus 2", FILES)
+
+    text = model.calls[0]["turns"][0].content
     assert INSTRUCTIONS[SummaryKind.RECAP] in text
     assert INSTRUCTIONS[SummaryKind.PREP] not in text
 
 
-def test_returns_the_text_and_the_model_that_wrote_it():
-    result, _ = summarize(message("חלק א", "חלק ב", model="claude-opus-5"))
-
-    assert result.content == "חלק אחלק ב"
-    assert result.model == "claude-opus-5"
-
-
-@pytest.mark.parametrize("stop_reason", ["refusal", "max_tokens"])
-def test_unfinished_answers_raise(stop_reason):
-    with pytest.raises(SummaryError):
-        summarize(message("partial", stop_reason=stop_reason))
-
-
-def test_empty_answer_raises():
-    with pytest.raises(SummaryError):
-        summarize(message("  "))
-
-
 def test_a_lecture_without_files_is_rejected():
     with pytest.raises(ValueError):
-        Summarizer(FakeClient(message("x")), MODEL).summarize(SummaryKind.PREP, "Calculus 2", [])  # type: ignore[arg-type]
+        Summarizer(FakeModel()).summarize(SummaryKind.PREP, "Calculus 2", [])

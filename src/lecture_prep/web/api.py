@@ -20,9 +20,9 @@ from lecture_prep.config import Settings, get_settings
 from lecture_prep.db.models import Course, Lecture, Summary, SummaryKind
 from lecture_prep.db.session import get_session
 from lecture_prep.google_api.drive import DriveClient
-from lecture_prep.lecture_chat import ChatMessage, LectureChat
+from lecture_prep.lecture_chat import LectureChat
 from lecture_prep.lecture_locator import LectureMaterial, course_lectures
-from lecture_prep.summarizer import LectureFile, SummaryError, claude_client
+from lecture_prep.llm import ChatMessage, LectureFile, ModelError, make_model
 from lecture_prep.web.render import render_markdown
 from lecture_prep.web.telegram_auth import InvalidInitData, verify_init_data
 
@@ -58,8 +58,7 @@ def get_drive(settings: SettingsDep) -> Iterator[DriveClient]:
 
 
 def get_chat(settings: SettingsDep) -> LectureChat:
-    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    return LectureChat(claude_client(api_key), settings.anthropic_model)
+    return LectureChat(make_model(settings))
 
 
 Owner = Depends(require_owner)
@@ -128,7 +127,7 @@ def chat(
         )
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
-    except SummaryError as error:
+    except ModelError as error:
         raise HTTPException(502, str(error)) from error
     return ChatAnswer(answer=render_markdown(text))
 

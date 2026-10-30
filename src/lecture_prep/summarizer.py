@@ -1,26 +1,18 @@
-"""Write lecture summaries with Claude. The lecture's PDFs go to the model as-is - slides, formulas and
-diagrams included - so there is no text-extraction step.
+"""Write lecture summaries. The lecture's PDFs go to the model as-is - slides, formulas and diagrams
+included - so there is no text-extraction step. Which model writes them is set in .env (see llm.py).
 
 Two kinds of summary (see SummaryKind):
 - recap: the previous lecture, so you remember where the course stands.
 - prep: today's lecture, the big picture and the intuition behind each idea.
 """
 
-import base64
-import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import anthropic
-from anthropic.types.beta import BetaContentBlockParam
-
 from lecture_prep.db.models import SummaryKind
-
-log = logging.getLogger(__name__)
+from lecture_prep.llm import ChatMessage, LectureFile, Model
 
 MAX_TOKENS = 32000
-# On a safety decline, the API re-runs the request on a suitable fallback model inside the same call.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 SYSTEM_PROMPT = """\
 You help a university student get ready for lectures. You receive the material of one lecture (slides \
@@ -76,80 +68,18 @@ Length: 250-400 words.""",
 
 
 @dataclass(frozen=True)
-class LectureFile:
-    name: str
-    pdf: bytes
-
-
-@dataclass(frozen=True)
 class SummaryResult:
     content: str
     model: str  # the model that actually wrote it - a fallback model if the first one declined
 
 
-class SummaryError(RuntimeError):
-    """The model did not produce a usable summary."""
-
-
-def lecture_documents(files: Sequence[LectureFile]) -> list[BetaContentBlockParam]:
-    """The lecture's PDFs as document blocks, titled by file name."""
-    return [
-        {
-            "type": "document",
-            "source": {
-                "type": "base64",
-                "media_type": "application/pdf",
-                "data": base64.standard_b64encode(file.pdf).decode("ascii"),
-            },
-            "title": file.name,
-        }
-        for file in files
-    ]
-
-
 class Summarizer:
-    def __init__(self, client: anthropic.Anthropic, model: str) -> None:
-        self._client = client
+    def __init__(self, model: Model) -> None:
         self._model = model
 
     def summarize(self, kind: SummaryKind, course_name: str, files: Sequence[LectureFile]) -> SummaryResult:
         if not files:
             raise ValueError("a lecture needs at least one file to summarize")
-        content: list[BetaContentBlockParam] = [
-            *lecture_documents(files),
-            {"type": "text", "text": f"Course: {course_name}\n\n{INSTRUCTIONS[kind]}"},
-        ]
-        # Long PDFs make for slow requests; streaming keeps the connection from timing out.
-        with self._client.beta.messages.stream(
-            model=self._model,
-            max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": content}],
-            output_config={"effort": "high"},
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-        ) as stream:
-            message = stream.get_final_message()
-        usage = message.usage
-        log.info(
-            "%s for %s: %d input tokens, %d output tokens (%s)",
-            kind,
-            course_name,
-            usage.input_tokens,
-            usage.output_tokens,
-            message.model,
-        )
-
-        if message.stop_reason == "refusal":
-            raise SummaryError(f"the model declined to summarize this lecture ({message.stop_details})")
-        if message.stop_reason == "max_tokens":
-            raise SummaryError("the summary was cut off at the token limit")
-        text = "".join(block.text for block in message.content if block.type == "text").strip()
-        if not text:
-            raise SummaryError("the model returned an empty summary")
-        return SummaryResult(content=text, model=message.model)
-
-
-def claude_client(api_key: str | None) -> anthropic.Anthropic:
-    """An Anthropic client; with no key, the SDK reads ANTHROPIC_API_KEY or a stored login itself."""
-    return anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+        request = ChatMessage("user", f"Course: {course_name}\n\n{INSTRUCTIONS[kind]}")
+        reply = self._model.generate(SYSTEM_PROMPT, files, [request], effort="high", max_tokens=MAX_TOKENS)
+        return SummaryResult(content=reply.text, model=reply.model)

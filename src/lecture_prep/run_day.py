@@ -14,7 +14,8 @@ from lecture_prep.daily import LectureBrief, prepare_day
 from lecture_prep.db.session import SessionLocal
 from lecture_prep.google_api.calendar import CalendarClient
 from lecture_prep.google_api.drive import DriveClient
-from lecture_prep.summarizer import Summarizer, claude_client
+from lecture_prep.llm import make_model
+from lecture_prep.summarizer import Summarizer
 
 
 def main() -> None:
@@ -24,8 +25,7 @@ def main() -> None:
     settings = get_settings()
     tz = ZoneInfo(settings.timezone)
     day = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else datetime.now(tz).date()
-    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    writer = Summarizer(claude_client(api_key), settings.anthropic_model)
+    writer = Summarizer(make_model(settings))
 
     with (
         CalendarClient.from_settings(settings) as calendar,
