@@ -11,7 +11,8 @@ from lecture_prep.db.base import Base
 
 config = context.config
 # Take the database URL from our settings (.env), not from alembic.ini.
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+if not config.get_main_option("sqlalchemy.url"):  # the tests set their own database here
+    config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)  # keep app loggers working

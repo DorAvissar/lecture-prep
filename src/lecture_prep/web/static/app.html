@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>הכנה להרצאה</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* Telegram passes its theme as CSS variables; the fallbacks are for a normal browser. */
+    :root {
+      --bg: var(--tg-theme-bg-color, #ffffff);
+      --text: var(--tg-theme-text-color, #1d1d1f);
+      --hint: var(--tg-theme-hint-color, #8a8a8e);
+      --accent: var(--tg-theme-button-color, #2481cc);
+      --accent-text: var(--tg-theme-button-text-color, #ffffff);
+      --surface: var(--tg-theme-secondary-bg-color, #f2f2f7);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    header { padding: 20px 18px 8px; }
+    header h1 { margin: 0; font-size: 22px; }
+    header p { margin: 2px 0 0; color: var(--hint); font-size: 15px; }
+
+    nav {
+      position: sticky; top: 0; z-index: 1;
+      display: flex; gap: 6px; padding: 10px 14px;
+      background: var(--bg);
+    }
+    nav button {
+      flex: 1; padding: 9px 0; border: 0; border-radius: 10px;
+      background: var(--surface); color: var(--text); font: inherit; font-size: 15px;
+    }
+    nav button.active { background: var(--accent); color: var(--accent-text); }
+
+    main { padding: 4px 18px 120px; }
+    section[hidden] { display: none; }
+    h3 { margin: 26px 0 6px; font-size: 18px; }
+    h3:first-child { margin-top: 10px; }
+    p { margin: 0 0 12px; }
+    ul { margin: 0 0 12px; padding-inline-start: 22px; }
+    li { margin-bottom: 6px; }
+    b { font-weight: 650; }
+    /* English and code stay left-to-right, isolated from the Hebrew around them. */
+    bdi, code { unicode-bidi: isolate; direction: ltr; }
+    code {
+      font: 0.88em ui-monospace, Menlo, Consolas, monospace;
+      background: var(--surface); padding: 1px 5px; border-radius: 5px;
+    }
+    pre {
+      direction: ltr; text-align: left; overflow-x: auto;
+      background: var(--surface); padding: 10px 12px; border-radius: 10px;
+    }
+    pre code { background: none; padding: 0; }
+    .empty { color: var(--hint); }
+
+    #messages { display: flex; flex-direction: column; gap: 10px; }
+    .bubble { max-width: 92%; padding: 10px 14px; border-radius: 16px; }
+    .bubble p:last-child, .bubble ul:last-child { margin-bottom: 0; }
+    .user { align-self: flex-start; background: var(--accent); color: var(--accent-text); white-space: pre-wrap; }
+    .assistant { align-self: flex-end; background: var(--surface); }
+    .thinking { color: var(--hint); }
+    form {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+      background: var(--bg); border-top: 1px solid var(--surface);
+    }
+    form[hidden] { display: none; }
+    textarea {
+      flex: 1; resize: none; height: 44px; max-height: 120px; padding: 10px 12px;
+      border: 1px solid var(--surface); border-radius: 12px;
+      background: var(--surface); color: var(--text); font: inherit; font-size: 16px;
+    }
+    form button {
+      border: 0; border-radius: 12px; padding: 0 16px;
+      background: var(--accent); color: var(--accent-text); font: inherit;
+    }
+    form button:disabled { opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="course">טוען…</h1>
+    <p id="lecture"></p>
+  </header>
+
+  <nav>
+    <button data-tab="prep" class="active">הכנה</button>
+    <button data-tab="recap">חזרה</button>
+    <button data-tab="chat">שאלות</button>
+  </nav>
+
+  <main>
+    <section id="prep"></section>
+    <section id="recap" hidden></section>
+    <section id="chat" hidden>
+      <p class="empty" id="chat-hint">אפשר לשאול כל שאלה על ההרצאה של היום או על ההרצאה הקודמת.</p>
+      <div id="messages"></div>
+    </section>
+  </main>
+
+  <form id="ask" hidden>
+    <textarea id="question" placeholder="מה תרצה לשאול?" rows="1"></textarea>
+    <button type="submit" id="send">שליחה</button>
+  </form>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const params = new URLSearchParams(location.search);
+    const courseId = Number(params.get("course"));
+    const number = Number(params.get("lecture"));
+    const headers = { "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "" };
+    const history = [];  // the chat so far; not stored on the server
+
+    const $ = (id) => document.getElementById(id);
+
+    function showTab(name) {
+      for (const button of document.querySelectorAll("nav button")) {
+        button.classList.toggle("active", button.dataset.tab === name);
+      }
+      for (const section of document.querySelectorAll("main section")) {
+        section.hidden = section.id !== name;
+      }
+      $("ask").hidden = name !== "chat";
+      if (name === "chat") $("question").focus();
+    }
+    for (const button of document.querySelectorAll("nav button")) {
+      button.addEventListener("click", () => showTab(button.dataset.tab));
+    }
+
+    function fill(section, html, emptyText) {
+      section.innerHTML = html || `<p class="empty">${emptyText}</p>`;
+    }
+
+    async function load() {
+      const response = await fetch(`/api/lectures/${courseId}/${number}`, { headers });
+      if (!response.ok) {
+        $("course").textContent = "לא הצלחתי לטעון את ההרצאה";
+        return;
+      }
+      const lecture = await response.json();
+      $("course").textContent = lecture.course;
+      $("lecture").textContent = `הרצאה ${lecture.number}`;
+      fill($("prep"), lecture.prep, "עדיין אין הכנה להרצאה הזאת.");
+      fill($("recap"), lecture.recap, "אין חזרה: זו ההרצאה הראשונה, או שעדיין אין לה קבצים.");
+    }
+
+    function addBubble(role, html) {
+      const bubble = document.createElement("div");
+      bubble.className = `bubble ${role}`;
+      bubble.innerHTML = html;
+      $("messages").append(bubble);
+      bubble.scrollIntoView({ behavior: "smooth", block: "end" });
+      return bubble;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    $("ask").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const question = $("question").value.trim();
+      if (!question) return;
+      $("question").value = "";
+      $("chat-hint").hidden = true;
+      $("send").disabled = true;
+
+      history.push({ role: "user", content: question });
+      addBubble("user", escapeHtml(question));
+      const pending = addBubble("assistant thinking", "חושב…");
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ course_id: courseId, number, messages: history }),
+        });
+        if (!response.ok) throw new Error((await response.json()).detail || response.status);
+        const { answer } = await response.json();
+        pending.className = "bubble assistant";
+        pending.innerHTML = answer;
+        history.push({ role: "assistant", content: pending.innerText });
+      } catch (error) {
+        history.pop();  // the question was not answered; let it be asked again
+        pending.className = "bubble assistant thinking";
+        pending.textContent = `משהו השתבש: ${error.message}`;
+      } finally {
+        $("send").disabled = false;
+      }
+    });
+
+    $("question").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        $("ask").requestSubmit();
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

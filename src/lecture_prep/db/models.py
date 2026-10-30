@@ -62,3 +62,16 @@ class Summary(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lecture: Mapped[Lecture] = relationship(back_populates="summaries")
+
+
+class SentMessage(Base):
+    """A Telegram message that was sent, so the scheduler never sends it twice."""
+
+    __tablename__ = "sent_messages"
+    __table_args__ = (UniqueConstraint("kind", "day", "event_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20))  # "morning" or "reminder"
+    day: Mapped[date]
+    event_id: Mapped[str] = mapped_column(String(200), default="")  # the lecture's event; "" for morning
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

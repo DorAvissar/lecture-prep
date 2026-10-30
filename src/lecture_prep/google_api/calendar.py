@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from types import TracebackType
 from typing import Any, Self
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -25,21 +26,27 @@ class CalendarEvent:
 class CalendarClient:
     """Thin wrapper over the Calendar API. Takes an httpx.Client so tests can plug in a fake transport."""
 
-    def __init__(self, http: httpx.Client) -> None:
+    def __init__(self, http: httpx.Client, calendar_ids: tuple[str, ...] = ("primary",)) -> None:
         self._http = http
+        # "primary" is your own calendar; shared calendars (a university one) are added by their id.
+        self._calendar_ids = calendar_ids
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Self:
         http = httpx.Client(
             base_url=CALENDAR_URL, auth=BearerAuth(TokenSource(settings.google_token_path)), timeout=30
         )
-        return cls(http)
+        return cls(http, tuple(settings.calendar_ids))
 
     def events_on(self, day: date, tz: ZoneInfo) -> list[CalendarEvent]:
-        """Return the timed events of `day` (midnight to midnight in `tz`) from the primary calendar.
+        """Return the timed events of `day` (midnight to midnight in `tz`) from every configured calendar.
 
         Ordered by start time. All-day events (no specific hour) are skipped - lectures have hours.
         """
+        events = [event for calendar_id in self._calendar_ids for event in self._events(calendar_id, day, tz)]
+        return sorted(events, key=lambda event: event.start)
+
+    def _events(self, calendar_id: str, day: date, tz: ZoneInfo) -> list[CalendarEvent]:
         day_start = datetime.combine(day, time(), tzinfo=tz)
         params = {
             "timeMin": day_start.isoformat(),
@@ -49,13 +56,19 @@ class CalendarClient:
         }
         events: list[CalendarEvent] = []
         while True:  # Google returns long result lists in pages, linked by nextPageToken
-            response = self._http.get("/calendars/primary/events", params=params)
+            response = self._http.get(f"/calendars/{quote(calendar_id, safe='')}/events", params=params)
             response.raise_for_status()
             page = response.json()
             events.extend(_to_event(raw) for raw in page.get("items", []) if "dateTime" in raw["start"])
             if "nextPageToken" not in page:
                 return events
             params["pageToken"] = page["nextPageToken"]
+
+    def calendars(self) -> list[tuple[str, str]]:
+        """(id, name) of every calendar in your list, including ones shared with you."""
+        response = self._http.get("/users/me/calendarList")
+        response.raise_for_status()
+        return [(raw["id"], raw.get("summary", "")) for raw in response.json().get("items", [])]
 
     def close(self) -> None:
         self._http.close()
