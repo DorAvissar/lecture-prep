@@ -30,3 +30,17 @@ def test_production_refuses_the_local_database():
 
     with pytest.raises(ValidationError, match="DATABASE_URL is not set"):
         Settings(_env_file=None, environment="production")
+
+
+def test_database_url_forgives_what_pasting_into_a_host_adds():
+    from lecture_prep.config import normalize_database_url
+
+    expected = "postgresql+psycopg://u:p@ep-x.neon.tech/neondb?sslmode=require"
+    for pasted in (
+        " postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require ",
+        "'postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require'",
+        "<u:p@ep-x.neon.tech/neondb?sslmode=require>",
+        "DATABASE_URL=postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require",
+        "psql 'postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require'",
+    ):
+        assert normalize_database_url(pasted) == expected, pasted

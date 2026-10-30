@@ -31,6 +31,6 @@ def test_database_url_survives_copy_paste_noise():
     from lecture_prep.cloud_env import clean_database_url
 
     assert clean_database_url(" <user:pw@ep-x.neon.tech/db?sslmode=require> ") == (
-        "postgresql://user:pw@ep-x.neon.tech/db?sslmode=require"
+        "postgresql+psycopg://user:pw@ep-x.neon.tech/db?sslmode=require"
     )
-    assert clean_database_url("'postgresql://user:pw@h/db'") == "postgresql://user:pw@h/db"
+    assert clean_database_url("'postgresql://user:pw@h/db'") == "postgresql+psycopg://user:pw@h/db"
