@@ -33,3 +33,6 @@ courses.toml
 
 # Blind model comparisons (python -m lecture_prep.compare)
 comparisons/
+
+# Cloud variables with secrets (python -m lecture_prep.cloud_env)
+railway.env
