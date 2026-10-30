@@ -1,7 +1,4 @@
-"""Decide which of the day's calendar events are lectures, and of which course.
-
-Exercise: `match_course` and `lectures_on` are yours to implement - see tests/test_calendar_sync.py.
-"""
+"""Decide which of the day's calendar events are lectures, and of which course."""
 
 from dataclasses import dataclass
 from datetime import date
