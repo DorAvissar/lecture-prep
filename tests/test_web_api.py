@@ -150,3 +150,33 @@ def test_public_home_and_privacy_pages_for_google(db_session, chat):
     assert home.status_code == privacy.status_code == 200
     assert 'href="/privacy"' in home.text
     assert "read-only" in privacy.text and "Limited Use" in privacy.text
+
+
+def test_members_can_open_lectures_and_strangers_cannot(db_session, course, chat):
+    from lecture_prep.db.models import Member
+
+    db_session.add(Member(chat_id=55, name="Noa"))
+    db_session.commit()
+    client = make_client(db_session, chat)
+    url = f"/api/lectures/{course.id}/5"
+
+    assert client.get(url, headers={"X-Telegram-Init-Data": init_data(user_id=55)}).status_code == 200
+    assert client.get(url, headers={"X-Telegram-Init-Data": init_data(user_id=56)}).status_code == 403
+
+
+def test_members_have_a_daily_question_limit_and_the_owner_does_not(db_session, course, chat):
+    from lecture_prep.db.models import Member
+
+    db_session.add(Member(chat_id=55, name="Noa"))
+    db_session.commit()
+    client = make_client(db_session, chat)
+    body = {"course_id": course.id, "number": 5, "messages": [{"role": "user", "content": "?"}]}
+
+    def ask(user_id: int) -> int:
+        headers = {"X-Telegram-Init-Data": init_data(user_id=user_id)}
+        return client.post("/api/chat", json=body, headers=headers).status_code
+
+    member_answers = [ask(55) for _ in range(21)]
+    assert member_answers[:20] == [200] * 20
+    assert member_answers[20] == 429
+    assert [ask(OWNER) for _ in range(25)] == [200] * 25
