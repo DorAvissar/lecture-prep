@@ -87,9 +87,10 @@ class ClaudeModel:
 
         usage = message.usage
         log.info(
-            "%s: %d input (%d from cache), %d output tokens",
+            "%s: %d input (+%d written to cache, %d read from cache), %d output tokens",
             message.model,
             usage.input_tokens,
+            usage.cache_creation_input_tokens or 0,
             usage.cache_read_input_tokens or 0,
             usage.output_tokens,
         )

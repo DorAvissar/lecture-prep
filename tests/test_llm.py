@@ -18,7 +18,9 @@ TURNS = [ChatMessage("user", "שאלה 1"), ChatMessage("assistant", "תשובה
 class FakeAnthropic:
     def __init__(self, *texts: str, stop_reason: str = "end_turn", model: str = "claude-opus-5-5") -> None:
         self.requests: list[dict] = []
-        usage = SimpleNamespace(input_tokens=100, cache_read_input_tokens=0, output_tokens=50)
+        usage = SimpleNamespace(
+            input_tokens=100, cache_creation_input_tokens=0, cache_read_input_tokens=0, output_tokens=50
+        )
         blocks = [SimpleNamespace(type="thinking", thinking="")]
         blocks += [SimpleNamespace(type="text", text=text) for text in texts]
         reply = SimpleNamespace(
