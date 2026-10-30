@@ -1,8 +1,8 @@
 """The Mini App's routes: the page itself, a lecture's summaries, and the lecture chat.
 
 Every API request must carry Telegram's signed init data (header X-Telegram-Init-Data) from the one
-Telegram user the app belongs to. In development, a request without it is let through, so the page can
-be opened in a normal browser.
+Telegram user the app belongs to. In development, a request from this computer without it is let through,
+so the page can be opened in a normal browser.
 """
 
 from collections.abc import Iterator
@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -33,11 +33,19 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
+LOCAL_CLIENTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
 def require_owner(
-    settings: SettingsDep, init_data: Annotated[str | None, Header(alias="X-Telegram-Init-Data")] = None
+    request: Request,
+    settings: SettingsDep,
+    init_data: Annotated[str | None, Header(alias="X-Telegram-Init-Data")] = None,
 ) -> None:
     if not init_data:
-        if settings.environment == "development":
+        # The browser shortcut is for your own computer only: in the cloud, a wrong ENVIRONMENT must never
+        # open the summaries and the paid chat to anyone who finds the address.
+        is_local = request.client is not None and request.client.host in LOCAL_CLIENTS
+        if settings.environment == "development" and is_local:
             return
         raise HTTPException(401, "open this page from Telegram")
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:

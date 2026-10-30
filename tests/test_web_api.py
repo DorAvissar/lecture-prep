@@ -133,3 +133,10 @@ def test_chat_about_a_lecture_without_files(db_session, course, chat):
     )
 
     assert response.status_code == 404
+
+
+def test_development_never_opens_the_api_to_other_computers(db_session, course, chat):
+    app_client = make_client(db_session, chat, environment="development")
+    remote = TestClient(app_client.app, client=("203.0.113.7", 50000))
+
+    assert remote.get(f"/api/lectures/{course.id}/5").status_code == 401

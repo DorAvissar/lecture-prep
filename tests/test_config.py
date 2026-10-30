@@ -44,3 +44,9 @@ def test_database_url_forgives_what_pasting_into_a_host_adds():
         "psql 'postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require'",
     ):
         assert normalize_database_url(pasted) == expected, pasted
+
+
+def test_environment_forgives_pasted_quotes_spaces_and_capitals():
+    settings = Settings(_env_file=None, environment=' "Production" ', database_url="postgresql://u:p@h/db")
+
+    assert settings.environment == "production"
