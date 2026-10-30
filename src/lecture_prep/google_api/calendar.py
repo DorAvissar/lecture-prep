@@ -1,13 +1,9 @@
-"""Read events from Google Calendar through the Calendar REST API (v3).
-
-Exercise: `events_on` is yours to implement - see tests/test_google_calendar.py for the spec.
-`drive.py` in this folder is a good model: same httpx client, same BearerAuth, same pagination idea.
-"""
+"""Read events from Google Calendar through the Calendar REST API (v3)."""
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -44,7 +40,22 @@ class CalendarClient:
 
         Ordered by start time. All-day events (no specific hour) are skipped - lectures have hours.
         """
-        raise NotImplementedError("Task 2 - yours to write")
+        day_start = datetime.combine(day, time(), tzinfo=tz)
+        params = {
+            "timeMin": day_start.isoformat(),
+            "timeMax": (day_start + timedelta(days=1)).isoformat(),
+            "singleEvents": "true",  # expand repeating events (a weekly lecture) into single occurrences
+            "orderBy": "startTime",  # only allowed together with singleEvents
+        }
+        events: list[CalendarEvent] = []
+        while True:  # Google returns long result lists in pages, linked by nextPageToken
+            response = self._http.get("/calendars/primary/events", params=params)
+            response.raise_for_status()
+            page = response.json()
+            events.extend(_to_event(raw) for raw in page.get("items", []) if "dateTime" in raw["start"])
+            if "nextPageToken" not in page:
+                return events
+            params["pageToken"] = page["nextPageToken"]
 
     def close(self) -> None:
         self._http.close()
@@ -56,3 +67,12 @@ class CalendarClient:
         self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
     ) -> None:
         self.close()
+
+
+def _to_event(raw: dict[str, Any]) -> CalendarEvent:
+    return CalendarEvent(
+        id=raw["id"],
+        title=raw.get("summary", ""),  # Google leaves "summary" out when the event has no title
+        start=datetime.fromisoformat(raw["start"]["dateTime"]),
+        end=datetime.fromisoformat(raw["end"]["dateTime"]),
+    )
