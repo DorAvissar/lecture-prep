@@ -26,7 +26,8 @@ from lecture_prep.llm import ChatMessage, LectureFile, ModelError, make_model
 from lecture_prep.web.render import render_markdown
 from lecture_prep.web.telegram_auth import InvalidInitData, verify_init_data
 
-PAGE = Path(__file__).parent / "static" / "app.html"
+STATIC = Path(__file__).parent / "static"
+PAGE = STATIC / "app.html"
 
 router = APIRouter()
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -97,6 +98,17 @@ class ChatAnswer(BaseModel):
 @router.get("/app", include_in_schema=False)
 def page() -> FileResponse:
     return FileResponse(PAGE, media_type="text/html")
+
+
+# Public pages that Google's OAuth consent screen links to (app home page and privacy policy).
+@router.get("/", include_in_schema=False)
+def home() -> FileResponse:
+    return FileResponse(STATIC / "home.html", media_type="text/html")
+
+
+@router.get("/privacy", include_in_schema=False)
+def privacy() -> FileResponse:
+    return FileResponse(STATIC / "privacy.html", media_type="text/html")
 
 
 @router.get("/api/lectures/{course_id}/{number}", dependencies=[Owner])
