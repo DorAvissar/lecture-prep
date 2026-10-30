@@ -38,6 +38,13 @@ def test_lecture_number_reads_leading_digits():
     assert lecture_number("  7.pdf") == 7
 
 
+def test_lecture_number_follows_the_word_lecture():
+    # The course name has its own number ("2"); the lecture number is the one after "הרצאה".
+    assert lecture_number("חדו״א 2- הרצאה 13 לנדסמן .pdf") == 13
+    assert lecture_number("תכנות מערכות- הרצאה 7 מני.pdf") == 7
+    assert lecture_number("הרצאה7.pdf") == 7
+
+
 def test_lecture_number_is_none_without_a_leading_number():
     assert lecture_number("syllabus.pdf") is None
     assert lecture_number("Lecture 3.pdf") is None
