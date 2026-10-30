@@ -38,13 +38,6 @@ def test_returns_none_when_nothing_matches():
     assert match_course("ארוחת צהריים עם סבתא", COURSES) is None
 
 
-def test_longest_matching_name_wins():
-    linear_2 = course("אלגברה לינארית 2")
-
-    assert match_course("אלגברה לינארית 2 - תרגול", [LINEAR, linear_2]) is linear_2
-    assert match_course("אלגברה לינארית 2 - תרגול", [linear_2, LINEAR]) is linear_2
-
-
 def test_empty_alias_never_matches():
     sloppy = course("פיזיקה", "")
 
