@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     database_url: str = "postgresql+psycopg://lecture_prep:lecture_prep@localhost:5432/lecture_prep"
+    # Your local time zone: "today" and lecture times are computed in it (IANA name).
+    timezone: str = "Asia/Jerusalem"
 
     # Google (Calendar + Drive). The client file is downloaded from Google Cloud Console; the token file is
     # written by `uv run python -m lecture_prep.google_api.login`. Both folders are git-ignored.
