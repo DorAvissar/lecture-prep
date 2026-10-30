@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from lecture_prep.db.models import Course
-from lecture_prep.google_api.drive import DriveItem
+from lecture_prep.google_api.drive import DriveItem, FolderNotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,11 @@ def lectures_folder(course: Course) -> str:
 
 
 def course_lectures(drive: Drive, course: Course) -> dict[int, LectureMaterial]:
-    """All of a course's lectures found in Drive, by lecture number."""
-    lectures = group_by_lecture(drive.list_folder(lectures_folder(course)))
+    """All of a course's lectures found in Drive, by lecture number. A missing folder means no lectures."""
+    try:
+        items = drive.list_folder(lectures_folder(course))
+    except FolderNotFoundError:
+        log.warning("No lectures folder for %s: %s", course.name, lectures_folder(course))
+        return {}
+    lectures = group_by_lecture(items)
     return {lecture.number: lecture for lecture in lectures}

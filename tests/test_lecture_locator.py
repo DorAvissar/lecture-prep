@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 from lecture_prep.db.models import Course
-from lecture_prep.google_api.drive import FOLDER_MIME, DriveItem
+from lecture_prep.google_api.drive import FOLDER_MIME, DriveItem, FolderNotFoundError
 from lecture_prep.lecture_locator import LectureMaterial, course_lectures, group_by_lecture, lecture_number
 
 PDF = "application/pdf"
@@ -95,3 +95,13 @@ def test_course_lectures_reads_the_lectures_subfolder_by_number():
 
 def test_course_lectures_of_an_empty_folder():
     assert course_lectures(FakeDrive([]), CALCULUS) == {}
+
+
+def test_course_lectures_without_a_lectures_folder(caplog):
+    class NoFolderDrive:
+        def list_folder(self, path: str) -> list[DriveItem]:
+            raise FolderNotFoundError(path)
+
+    with caplog.at_level(logging.WARNING):
+        assert course_lectures(NoFolderDrive(), CALCULUS) == {}
+    assert "No lectures folder" in caplog.text
