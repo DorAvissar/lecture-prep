@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import ARRAY, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import ARRAY, BigInteger, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from lecture_prep.db.base import Base
@@ -75,3 +75,26 @@ class SentMessage(Base):
     day: Mapped[date]
     event_id: Mapped[str] = mapped_column(String(200), default="")  # the lecture's event; "" for morning
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Member(Base):
+    """A classmate who joined through the invite link and gets the same messages as the owner."""
+
+    __tablename__ = "members"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, unique=True)  # Telegram ids exceed 32 bits
+    name: Mapped[str] = mapped_column(String(200), default="")
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChatUsage(Base):
+    """How many chat questions a member asked on a day, for the daily limit."""
+
+    __tablename__ = "chat_usage"
+    __table_args__ = (UniqueConstraint("chat_id", "day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    day: Mapped[date]
+    questions: Mapped[int] = mapped_column(default=0)
