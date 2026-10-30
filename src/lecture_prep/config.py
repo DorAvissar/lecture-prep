@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # Password for POST /internal/tick, the address an outside scheduler calls to run a tick.
     tick_secret: SecretStr | None = None
 
+    @field_validator("environment")
+    @classmethod
+    def clean_environment(cls, value: str) -> str:
+        """ "production", whatever spaces, quotes or capitals a pasted value came with."""
+        return value.strip().strip("\"'").strip().lower()
+
     @field_validator("database_url")
     @classmethod
     def clean_database_url(cls, url: str) -> str:
