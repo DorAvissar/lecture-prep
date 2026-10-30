@@ -35,4 +35,9 @@ def lectures_on(
     calendar: CalendarClient, courses: list[Course], day: date, tz: ZoneInfo
 ) -> list[ScheduledLecture]:
     """The day's lectures: calendar events that match a course, keeping the calendar's order."""
-    raise NotImplementedError("Task 3 - yours to write")
+    lectures = []
+    for event in calendar.events_on(day, tz):
+        course = match_course(event.title, courses)
+        if course is not None:
+            lectures.append(ScheduledLecture(course=course, event=event))
+    return lectures
