@@ -15,11 +15,11 @@ DAY = date(2026, 11, 2)
 Handler = Callable[[httpx.Request], httpx.Response]
 
 
-def make_client(handler: Handler) -> CalendarClient:
+def make_client(handler: Handler, calendar_ids: tuple[str, ...] = ("primary",)) -> CalendarClient:
     http = httpx.Client(
         base_url=CALENDAR_URL, transport=httpx.MockTransport(handler), auth=BearerAuth(lambda: "test-token")
     )
-    return CalendarClient(http)
+    return CalendarClient(http, calendar_ids)
 
 
 def timed_event(event_id: str, title: str, start: str, end: str) -> dict:
@@ -106,3 +106,43 @@ def test_follows_pagination():
         )
 
     assert [event.id for event in make_client(handler).events_on(DAY, TZ)] == ["e1", "e2"]
+
+
+def test_merges_several_calendars_by_start_time():
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.raw_path.decode().split("?")[0])
+        if "primary" in request.url.path:
+            return events(
+                timed_event("p1", "Dentist", "2026-11-02T12:00:00+02:00", "2026-11-02T13:00:00+02:00")
+            )
+        return events(timed_event("u1", "חדוא 2", "2026-11-02T09:00:00+02:00", "2026-11-02T11:00:00+02:00"))
+
+    uni = "abc#uni@group.calendar.google.com"
+    found = make_client(handler, ("primary", uni)).events_on(DAY, TZ)
+
+    assert [event.id for event in found] == ["u1", "p1"]
+    assert paths == [
+        "/calendar/v3/calendars/primary/events",
+        "/calendar/v3/calendars/abc%23uni%40group.calendar.google.com/events",
+    ]
+
+
+def test_lists_the_calendars_you_can_read():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/calendar/v3/users/me/calendarList"
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {"id": "me@gmail.com", "summary": "me@gmail.com", "primary": True},
+                    {"id": "uni@group.calendar.google.com", "summary": "Lectures"},
+                ]
+            },
+        )
+
+    assert make_client(handler).calendars() == [
+        ("me@gmail.com", "me@gmail.com"),
+        ("uni@group.calendar.google.com", "Lectures"),
+    ]

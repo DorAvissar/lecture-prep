@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     # written by `uv run python -m lecture_prep.google_api.login`. Both folders are git-ignored.
     google_client_secret_path: Path = Path(".secrets/google_client_secret.json")
     google_token_path: Path = Path(".cache/google_token.json")
+    # Calendars to read lectures from: "primary" is your own; add the id of a calendar shared with you.
+    calendar_ids: list[str] = ["primary"]
     # The Drive folder that holds one sub-folder per course, e.g. "Lectures".
     drive_lectures_folder: str = "Lectures"
     anthropic_api_key: SecretStr | None = None  # None: the SDK falls back to its own credential lookup
