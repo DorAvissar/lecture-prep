@@ -97,7 +97,8 @@ folder on your computer.
 ### Courses and lecture files
 
 Each course has a folder in Drive with a `הרצאות` (lectures) sub-folder. Only that sub-folder is read,
-so tutorials can live next to it. Every file in it **starts with its lecture number**; files with the
+so tutorials can live next to it. A file's lecture number is the number after the word `הרצאה`
+(`חדו״א 2- הרצאה 3.pdf`), or else the number its name starts with (`03 - Integrals.pdf`); files with the
 same number belong to the same lecture. Only PDFs and native Google docs are used (save `.pptx` slides
 as PDF).
 
@@ -105,10 +106,9 @@ as PDF).
 Lectures/
   Calculus 2/
     הרצאות/
-      1.pdf
-      2.pdf
-      2 - notes.pdf
-      3.pdf
+      חדו״א 2- הרצאה 1.pdf
+      חדו״א 2- הרצאה 2.pdf
+      חדו״א 2- הרצאה 3.pdf
     תרגולים/            <- ignored
 ```
 
@@ -126,6 +126,21 @@ uv run python -m lecture_prep.courses next "חדו\"א 2" 5   # the next Calculu
 
 If a lecture is cancelled but stays on the calendar, the count moves on anyway - run `next` again to
 fix it.
+
+### Lectures in a shared calendar
+
+By default lectures are read from your own Google calendar. If they are in another calendar, for example
+a university calendar in a different Google account, share it with the account you signed in with
+(calendar **Settings → Share with specific people → See all event details**), accept the invitation, then
+find its id and add it to `CALENDAR_IDS` in `.env`:
+
+```bash
+uv run python -m lecture_prep.google_api.calendars
+```
+
+```
+CALENDAR_IDS=["primary", "<the shared calendar's id>"]
+```
 
 ### Running a day
 
