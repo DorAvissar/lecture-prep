@@ -51,6 +51,16 @@ class TelegramClient:
             payload["reply_markup"] = {"inline_keyboard": [[_button(b)] for b in buttons]}
         self._call("sendMessage", payload)
 
+    def updates(self, offset: int | None = None) -> list[dict[str, Any]]:
+        """Messages sent to the bot since `offset`. Asking with a higher offset confirms the earlier ones."""
+        payload: dict[str, Any] = {"timeout": 0, "allowed_updates": ["message"]}
+        if offset is not None:
+            payload["offset"] = offset
+        return self._call("getUpdates", payload)
+
+    def bot_username(self) -> str:
+        return self._call("getMe", {})["username"]
+
     def recent_chats(self) -> list[Chat]:
         """Chats that recently messaged the bot - used once, to find your own chat id."""
         chats: dict[int, Chat] = {}
