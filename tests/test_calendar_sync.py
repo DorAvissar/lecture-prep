@@ -90,3 +90,12 @@ def test_lectures_on_keeps_calendar_order():
 
 def test_lectures_on_an_empty_day():
     assert lectures_on(FakeCalendar([]), COURSES, date(2026, 11, 2), TZ) == []
+
+
+def test_lectures_on_skips_tutorials_of_a_course():
+    tutorial = event("e1", "תרגול - לינארית", 10)
+    lecture = event("e2", "לינארית", 14)
+
+    lectures = lectures_on(FakeCalendar([tutorial, lecture]), COURSES, date(2026, 11, 2), TZ)
+
+    assert lectures == [ScheduledLecture(course=LINEAR, event=lecture)]
