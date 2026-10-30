@@ -120,7 +120,7 @@ tests/                        pytest test suite
 
 - [x] Project skeleton: FastAPI, tests, lint, CI, local database
 - [x] Data model: courses, lectures, summaries (SQLAlchemy + Alembic)
-- [ ] Calendar sync: today's lectures from Google Calendar
+- [x] Calendar sync: today's lectures from Google Calendar
 - [x] Google sign-in + Drive client: list and download lecture files
 - [ ] Lecture locator: find the previous and current lecture for a course
 - [ ] Processing: text extraction from PDF/PPTX, chunking, embeddings
