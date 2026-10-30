@@ -19,12 +19,13 @@ def pdf(name: str) -> DriveItem:
 
 
 class FakeDrive:
-    def __init__(self, *items: DriveItem) -> None:
+    def __init__(self, *items: DriveItem, folder: str = "Lectures/Calculus/הרצאות") -> None:
         self.items = list(items)
+        self.folder = folder
         self.downloaded: list[str] = []
 
     def list_folder(self, path: str) -> list[DriveItem]:
-        assert path == "Lectures/Calculus/הרצאות"
+        assert path == self.folder
         return self.items
 
     def download(self, item: DriveItem) -> bytes:
