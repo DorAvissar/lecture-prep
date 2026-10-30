@@ -170,10 +170,24 @@ uv run python -m lecture_prep.telegram.chat_id
 uv run python -m lecture_prep.tick
 ```
 
-Run it every 15 minutes (a cron job in the cloud). From `MORNING_HOUR` (default 07:00) it sends the
-day's overview with every recap and prep brief, once; `REMINDER_MINUTES` (default 30) before each lecture
-it sends a short reminder, once. Sent messages are recorded in the database, so extra runs are harmless
+Run it every 15 minutes (a cron job in the cloud). From `MORNING_HOUR` (default 07:00) it sends one
+message with the day's lectures, once; `REMINDER_MINUTES` (default 30) before each lecture it sends a
+short reminder, once. Each lecture has a button that opens the Mini App. Sent messages are recorded in the database, so extra runs are harmless
 and a failed run is retried by the next one.
+
+### The Mini App
+
+The buttons open a small page inside Telegram with three tabs: the prep brief for today's lecture, the
+recap of the previous one, and a chat that answers questions with both lectures' PDFs as context. It is
+one HTML file served by the FastAPI app (`/app`), with no front-end build.
+
+- Telegram opens Mini Apps only over https, so buttons appear once `PUBLIC_URL` is set (after deploying).
+- Every API call carries Telegram's signed init data, checked against the bot token; only the bot's owner
+  (`TELEGRAM_CHAT_ID`) gets an answer. In development the page also opens in a normal browser:
+  <http://localhost:8000/app?course=1&lecture=5>.
+- Mixed Hebrew and English is kept readable by isolating every English run and code span as its own
+  left-to-right segment inside the right-to-left page.
+- The chat is not stored; closing the page starts a new conversation.
 
 ### Changing the database schema
 
@@ -190,7 +204,8 @@ uv run alembic upgrade head
 src/lecture_prep/             application code: lecture locator, summarizer, daily pipeline
 src/lecture_prep/db/          database models and session
 src/lecture_prep/google_api/  Google sign-in, Drive and Calendar clients
-src/lecture_prep/telegram/    Telegram client and message formatting
+src/lecture_prep/telegram/    Telegram client and messages
+src/lecture_prep/web/         Mini App: page, API, Telegram sign-in check
 migrations/                   Alembic database migrations
 tests/                        pytest test suite
 .github/workflows/            CI pipeline
@@ -207,5 +222,5 @@ tests/                        pytest test suite
 - [x] Daily pipeline: calendar -> files -> stored summaries
 - [ ] Summary quality evals
 - [x] Scheduler + Telegram bot: morning message and lecture reminders
-- [ ] Telegram Mini App with lecture-aware chat
+- [x] Telegram Mini App: prep, recap and lecture-aware chat
 - [ ] Cloud deployment
