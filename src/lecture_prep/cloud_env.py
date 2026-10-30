@@ -7,12 +7,11 @@ scheduler must send the same value. The file holds secrets - paste it, then dele
 """
 
 import json
-import re
 import secrets
 import sys
 from pathlib import Path
 
-from lecture_prep.config import Settings, get_settings
+from lecture_prep.config import Settings, get_settings, normalize_database_url
 
 OUTPUT = Path("cloud.env")
 
@@ -47,9 +46,7 @@ def cloud_variables(
 
 def clean_database_url(raw: str) -> str:
     """Forgive copy-paste noise (spaces, quotes, <angle brackets>) and a missing postgresql:// prefix."""
-    url = raw.strip().strip("<>\"'").strip()
-    if url and not re.match(r"postgres(ql)?(\+\w+)?://", url):
-        url = "postgresql://" + url
+    url = normalize_database_url(raw)
     if url and "@" not in url:
         raise SystemExit(
             "That does not look like a database URL: expected postgresql://user:password@host/db"

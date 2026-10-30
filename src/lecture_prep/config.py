@@ -4,6 +4,7 @@ Secrets never live in code: every key the app needs is declared here and
 documented in .env.example.
 """
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
@@ -12,6 +13,23 @@ from pydantic import AliasChoices, Field, SecretStr, field_validator, model_vali
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_DATABASE_URL = "postgresql+psycopg://lecture_prep:lecture_prep@localhost:5432/lecture_prep"
+POSTGRES_SCHEME = re.compile(r"^postgres(?:ql)?(?:\+\w+)?://")
+
+
+def normalize_database_url(raw: str) -> str:
+    """A database URL as SQLAlchemy needs it, forgiving what copy-pasting into a host's settings adds.
+
+    Removes spaces, quotes and <angle brackets>, a pasted "DATABASE_URL=" or "psql" in front, adds a
+    missing postgresql:// and names the psycopg driver (hosts hand out plain postgresql:// URLs).
+    """
+    url = raw.strip()
+    url = re.sub(r"^(DATABASE_URL\s*=|psql\s+)", "", url).strip()
+    url = url.strip("<>\"'` ").strip()
+    if not url:
+        return url
+    if not POSTGRES_SCHEME.match(url):
+        url = "postgresql://" + url
+    return re.sub(r"^postgres(?:ql)?://", "postgresql+psycopg://", url)
 
 
 class Settings(BaseSettings):
@@ -60,12 +78,8 @@ class Settings(BaseSettings):
 
     @field_validator("database_url")
     @classmethod
-    def use_psycopg_driver(cls, url: str) -> str:
-        """Hosts like Railway hand out postgresql:// URLs; SQLAlchemy needs the driver named."""
-        for prefix in ("postgres://", "postgresql://"):
-            if url.startswith(prefix):
-                return "postgresql+psycopg://" + url.removeprefix(prefix)
-        return url
+    def clean_database_url(cls, url: str) -> str:
+        return normalize_database_url(url)
 
     @model_validator(mode="after")
     def production_needs_a_real_database(self) -> Self:
