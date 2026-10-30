@@ -18,5 +18,5 @@ COPY migrations ./migrations
 COPY src ./src
 RUN uv sync --locked --no-dev
 
-# Bring the database schema up to date, then serve.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn lecture_prep.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+# Check the settings arrived, bring the database schema up to date, then serve.
+CMD ["sh", "-c", "python -m lecture_prep.check_env && alembic upgrade head && uvicorn lecture_prep.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
