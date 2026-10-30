@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from lecture_prep import __version__
 from lecture_prep.config import get_settings
 from lecture_prep.web.api import router as mini_app
+from lecture_prep.web.internal import router as internal
 
 
 def create_app() -> FastAPI:
@@ -16,6 +17,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "version": __version__, "environment": get_settings().environment}
 
     app.include_router(mini_app)
+    app.include_router(internal)
     return app
 
 

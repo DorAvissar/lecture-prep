@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,7 +49,12 @@ class Settings(BaseSettings):
     reminder_minutes: int = 30  # how long before a lecture its reminder is sent
     # The app's public https address, e.g. https://lecture-prep.up.railway.app. Telegram buttons open the
     # Mini App there; until it is set, messages go without buttons.
-    public_url: str | None = None
+    # Render sets RENDER_EXTERNAL_URL on its own, so there it needs no setting.
+    public_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("PUBLIC_URL", "RENDER_EXTERNAL_URL")
+    )
+    # Password for POST /internal/tick, the address an outside scheduler calls to run a tick.
+    tick_secret: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
