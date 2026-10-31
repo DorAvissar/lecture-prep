@@ -92,3 +92,35 @@ def test_days_without_lectures_send_nothing(db_session, calculus):
 
     assert run(db_session, LECTURE_START.replace(hour=8), telegram, title="Dentist") == []
     assert telegram.sent == []
+
+
+def test_messages_go_to_the_owner_and_every_member(db_session, calculus):
+    from lecture_prep.db.models import Member
+
+    db_session.add_all([Member(chat_id=7, name="Noa"), Member(chat_id=8, name="Avi")])
+    db_session.commit()
+    telegram = FakeTelegram()
+
+    run(db_session, LECTURE_START.replace(hour=7), telegram)
+    run(db_session, LECTURE_START - timedelta(minutes=20), telegram)
+
+    assert [chat_id for chat_id, _, _ in telegram.sent] == [99, 7, 8, 99, 7, 8]
+
+
+def test_a_member_who_blocked_the_bot_does_not_stop_the_others(db_session, calculus):
+    from lecture_prep.db.models import Member
+    from lecture_prep.telegram.client import TelegramError
+
+    db_session.add_all([Member(chat_id=7, name="Noa"), Member(chat_id=8, name="Avi")])
+    db_session.commit()
+
+    class Blocked(FakeTelegram):
+        def send_message(self, chat_id, html, buttons=None):
+            if chat_id == 7:
+                raise TelegramError("Forbidden: bot was blocked by the user")
+            super().send_message(chat_id, html, buttons)
+
+    telegram = Blocked()
+
+    assert run(db_session, LECTURE_START.replace(hour=7), telegram) == ["morning"]
+    assert [chat_id for chat_id, _, _ in telegram.sent] == [99, 8]

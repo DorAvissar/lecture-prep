@@ -25,8 +25,9 @@ from lecture_prep.db.session import SessionLocal
 from lecture_prep.google_api.calendar import CalendarClient
 from lecture_prep.google_api.drive import DriveClient
 from lecture_prep.llm import make_model
+from lecture_prep.members import process_joins, recipients
 from lecture_prep.summarizer import Summarizer
-from lecture_prep.telegram.client import Button, TelegramClient
+from lecture_prep.telegram.client import Button, TelegramClient, TelegramError
 from lecture_prep.telegram.messages import morning_message, reminder_message
 
 log = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def tick(
 
     if briefs and not was_sent(session, MORNING, day):
         text, buttons = morning_message(briefs, schedule.tz, schedule.app_url)
-        messenger.send_message(chat_id, text, buttons)
+        send_to_all(session, messenger, chat_id, text, buttons)
         mark_sent(session, MORNING, day)
         sent.append(MORNING)
 
@@ -76,10 +77,23 @@ def tick(
         due = brief.event.start - lead <= now < brief.event.start
         if due and not was_sent(session, REMINDER, day, brief.event.id):
             text, buttons = reminder_message(brief, schedule.tz, schedule.app_url)
-            messenger.send_message(chat_id, text, buttons)
+            send_to_all(session, messenger, chat_id, text, buttons)
             mark_sent(session, REMINDER, day, brief.event.id)
             sent.append(f"{REMINDER} {brief.course.name}")
     return sent
+
+
+def send_to_all(
+    session: Session, messenger: Messenger, owner_chat_id: int, text: str, buttons: list[Button]
+) -> None:
+    """Send to the owner and every member. One member who blocked the bot does not stop the rest."""
+    for chat_id in recipients(session, owner_chat_id):
+        try:
+            messenger.send_message(chat_id, text, buttons)
+        except TelegramError as error:
+            if chat_id == owner_chat_id:
+                raise
+            log.warning("Could not send to member %s: %s", chat_id, error)
 
 
 def was_sent(session: Session, kind: str, day: date, event_id: str = "") -> bool:
@@ -111,6 +125,8 @@ def run_once(settings: Settings) -> list[str]:
         TelegramClient.from_token(settings.telegram_bot_token.get_secret_value()) as telegram,
         SessionLocal() as session,
     ):
+        invite_code = settings.invite_code.get_secret_value() if settings.invite_code else None
+        process_joins(session, telegram, invite_code, settings.telegram_chat_id)
         writer = Summarizer(make_model(settings))
         now = datetime.now().astimezone()
         sent = tick(session, calendar, drive, writer, telegram, settings.telegram_chat_id, schedule, now)

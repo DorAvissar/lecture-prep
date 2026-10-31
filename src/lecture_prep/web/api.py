@@ -1,14 +1,15 @@
 """The Mini App's routes: the page itself, a lecture's summaries, and the lecture chat.
 
-Every API request must carry Telegram's signed init data (header X-Telegram-Init-Data) from the one
-Telegram user the app belongs to. In development, a request from this computer without it is let through,
-so the page can be opened in a normal browser.
+Every API request must carry Telegram's signed init data (header X-Telegram-Init-Data) from the owner or
+a classmate who joined (see members.py); members have a daily limit on chat questions. In development,
+a request from this computer without it is let through, so the page can be opened in a normal browser.
 """
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -23,6 +24,7 @@ from lecture_prep.google_api.drive import DriveClient
 from lecture_prep.lecture_chat import LectureChat
 from lecture_prep.lecture_locator import LectureMaterial, course_lectures
 from lecture_prep.llm import ChatMessage, LectureFile, ModelError, make_model
+from lecture_prep.members import is_member, use_question
 from lecture_prep.web.render import render_markdown
 from lecture_prep.web.telegram_auth import InvalidInitData, verify_init_data
 
@@ -37,17 +39,19 @@ SessionDep = Annotated[Session, Depends(get_session)]
 LOCAL_CLIENTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 
-def require_owner(
+def require_user(
     request: Request,
     settings: SettingsDep,
+    session: SessionDep,
     init_data: Annotated[str | None, Header(alias="X-Telegram-Init-Data")] = None,
-) -> None:
+) -> int:
+    """The Telegram user id of the owner or a member making the request; anyone else is refused."""
     if not init_data:
         # The browser shortcut is for your own computer only: in the cloud, a wrong ENVIRONMENT must never
         # open the summaries and the paid chat to anyone who finds the address.
         is_local = request.client is not None and request.client.host in LOCAL_CLIENTS
         if settings.environment == "development" and is_local:
-            return
+            return settings.telegram_chat_id or 0
         raise HTTPException(401, "open this page from Telegram")
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
         raise HTTPException(503, "Telegram is not configured")
@@ -57,8 +61,10 @@ def require_owner(
         )
     except InvalidInitData as error:
         raise HTTPException(401, "invalid Telegram data") from error
-    if user_id != settings.telegram_chat_id:  # in a private chat, the chat id is the user's id
-        raise HTTPException(403, "not your app")
+    # In a private chat, the chat id is the user's id.
+    if user_id != settings.telegram_chat_id and not is_member(session, user_id):
+        raise HTTPException(403, "this bot is private")
+    return user_id
 
 
 def get_drive(settings: SettingsDep) -> Iterator[DriveClient]:
@@ -70,7 +76,7 @@ def get_chat(settings: SettingsDep) -> LectureChat:
     return LectureChat(make_model(settings))
 
 
-Owner = Depends(require_owner)
+UserId = Annotated[int, Depends(require_user)]
 
 
 class LectureView(BaseModel):
@@ -111,8 +117,8 @@ def privacy() -> FileResponse:
     return FileResponse(STATIC / "privacy.html", media_type="text/html")
 
 
-@router.get("/api/lectures/{course_id}/{number}", dependencies=[Owner])
-def lecture_view(course_id: int, number: int, session: SessionDep) -> LectureView:
+@router.get("/api/lectures/{course_id}/{number}")
+def lecture_view(course_id: int, number: int, session: SessionDep, user_id: UserId) -> LectureView:
     course = _course(session, course_id)
     prep = _summary(session, course_id, number, SummaryKind.PREP)
     recap = _summary(session, course_id, number - 1, SummaryKind.RECAP)
@@ -124,13 +130,21 @@ def lecture_view(course_id: int, number: int, session: SessionDep) -> LectureVie
     )
 
 
-@router.post("/api/chat", dependencies=[Owner])
+@router.post("/api/chat")
 def chat(
     request: ChatRequest,
     session: SessionDep,
+    settings: SettingsDep,
+    user_id: UserId,
     drive: Annotated[DriveClient, Depends(get_drive)],
     lecture_chat: Annotated[LectureChat, Depends(get_chat)],
 ) -> ChatAnswer:
+    if user_id != settings.telegram_chat_id:  # members have a daily limit; the owner does not
+        today = datetime.now(ZoneInfo(settings.timezone)).date()
+        if not use_question(session, user_id, today, settings.member_daily_questions):
+            raise HTTPException(
+                429, f"הגעת למגבלה של {settings.member_daily_questions} שאלות ביום. נתראה מחר!"
+            )
     course = _course(session, request.course_id)
     lectures = course_lectures(drive, course)
     current = lectures.get(request.number)

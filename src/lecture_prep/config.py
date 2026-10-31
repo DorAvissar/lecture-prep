@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     public_url: str | None = Field(
         default=None, validation_alias=AliasChoices("PUBLIC_URL", "RENDER_EXTERNAL_URL")
     )
+    # Sharing with classmates: the code in the invite link, and how many chat questions a member may ask a
+    # day (the owner has no limit). Without INVITE_CODE nobody can join.
+    invite_code: SecretStr | None = None
+    member_daily_questions: int = 20
     # Password for POST /internal/tick, the address an outside scheduler calls to run a tick.
     tick_secret: SecretStr | None = None
 
