@@ -34,14 +34,15 @@ def test_sends_a_marked_morning_message_and_records_nothing(db_session, calculus
         drive,
         FakeWriter(),
         telegram,
-        99,
+        [99, 7],
         LECTURE_START.date(),
         TZ,
         "https://app.example.com",
     )
 
     assert count == 1
-    [(chat_id, text, buttons)] = telegram.sent
+    assert [chat_id for chat_id, _, _ in telegram.sent] == [99, 7]
+    _, text, buttons = telegram.sent[0]
     assert text.startswith(TEST_MARK)
     assert "Calculus - הרצאה 2" in text
     assert len(buttons) == 1
@@ -57,7 +58,7 @@ def test_the_real_morning_message_still_goes_out_after_a_test(db_session, calcul
         drive,
         writer,
         FakeTelegram(),
-        99,
+        [99],
         LECTURE_START.date(),
         TZ,
         None,
